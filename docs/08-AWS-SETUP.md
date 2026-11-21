@@ -1,5 +1,7 @@
 # CYB-03 — AWS Infrastructure Setup
 
+> Earlier design proposal. For implementation order, permission scope and recovery behavior, use [the approved plan](12-IMPLEMENTATION-PLAN.md). The [README](../README.md) lists the capabilities available in the current checkout.
+
 ## Overview
 
 This document describes how to set up the required AWS resources for the CYB-03 test environment. All resources are created in an isolated test environment — never use production buckets.

@@ -10,17 +10,15 @@ CYB-03
 
 ## What We Are Building
 
-An intelligent security platform that protects company cloud storage (starting with AWS S3) from ransomware attacks. The system continuously monitors cloud storage activity, detects ransomware behaviour as early as possible, automatically stops the attack by revoking compromised credentials, and restores the original clean files from version history.
+AEGIS observes changes to customer-selected S3 files, explains suspicious activity and prepares a customer-approved recovery plan. The first implementation uses synthetic local versions. The AWS milestone adds the live connector and a separate recovery bucket.
 
-## Core Workflow
+## Core workflow
 
-```
-MONITOR → DETECT → ALERT → REVOKE ACCESS → RECOVER
-```
+Observe → investigate → review scoped containment → approve a specific recovery plan → verify the recovered copy.
 
 ## Why This Exists
 
-Companies store thousands of critical files in cloud storage. If an attacker compromises storage credentials, they can encrypt, rename, modify or corrupt thousands of files in minutes. Traditional security detects attacks only after major damage. This system detects ransomware activity within seconds, stops it, and recovers clean files automatically.
+Companies store thousands of critical files in cloud storage. If an attacker compromises storage credentials, they can encrypt, rename, modify or corrupt thousands of files in minutes. Traditional security detects attacks only after major damage. The team will measure detection and recovery latency during the live demo.
 
 ---
 
@@ -54,25 +52,13 @@ The detection engine uses **five combined signals**:
 
 Detection must happen within seconds where technically feasible. Never rely on a single signal alone.
 
-### D. Automatic Access Revocation
-- Identify the compromised IAM identity / access key
-- Automatically disable the compromised access key via IAM API
-- Prevent further unauthorized modifications
-- Record revocation event with timestamp
-- Notify admin
-- Full audit trail of every response action
-- **Safeguards**: configurable thresholds, identity attribution, allowlisted identities, simulation mode before real revocation
-- Never blindly disable legitimate company credentials
+### D. Customer-controlled containment
 
-### E. Automatic File Recovery
-- Identify all affected files in an incident
-- Retrieve previous versions from S3 Versioning
-- Find the last known clean version (before the attack timestamp)
-- Restore original files
-- Verify restored file integrity (ETag / content hash comparison)
-- Track and report recovery progress
-- Support one-click restoration from the dashboard
-- Never overwrite or destroy existing recovery versions
+Monitor-only is the default. An authorized customer administrator can approve a reversible restriction on the designated demo writer after reviewing identity evidence. Record and verify its effect on the scoped resource.
+
+### E. Approved file recovery
+
+Preview exact source versions, the trusted expected checksum and the separate recovery destination. Require explicit customer approval, preserve the original versions and verify the resulting copy by reading it back.
 
 ### F. False Positive Reduction
 - Configurable detection thresholds

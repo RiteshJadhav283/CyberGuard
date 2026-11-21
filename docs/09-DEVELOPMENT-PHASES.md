@@ -1,5 +1,7 @@
 # CYB-03 — Development Phases & Checklist
 
+> Earlier design proposal. For implementation order, permission scope and recovery behavior, use [the approved plan](12-IMPLEMENTATION-PLAN.md). The [README](../README.md) lists the capabilities available in the current checkout.
+
 ## Phase Overview
 
 | Phase | Name | Dependencies | Estimated Effort |

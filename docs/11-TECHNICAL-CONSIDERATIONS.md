@@ -1,5 +1,7 @@
 # CYB-03 — Technical Considerations & Pitfalls
 
+> Earlier design proposal. For implementation order, permission scope and recovery behavior, use [the approved plan](12-IMPLEMENTATION-PLAN.md). The [README](../README.md) lists the capabilities available in the current checkout.
+
 ## Critical Technical Details
 
 This document collects the non-obvious technical details, edge cases and pitfalls that any agent or developer working on this project must understand.
