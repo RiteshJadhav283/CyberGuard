@@ -20,7 +20,7 @@ class Login(BaseModel):
 @api.get("/health")
 def health(db: Session = Depends(database)):
     db.execute(text("SELECT id FROM incidents LIMIT 1"))
-    return {"database": "ready", "mode": "local fixture", "aws_connected": False}
+    return {"database": "ready", "service": "AEGIS"}
 
 
 @api.post("/auth/login")
@@ -158,3 +158,8 @@ def download(plan_id: str, user=Depends(current_user), db: Session = Depends(dat
 
 
 app.include_router(api)
+
+from .operations import router as operations_router
+app.include_router(operations_router)
+from .stream import stream
+app.websocket("/api/v1/ops/stream")(stream)

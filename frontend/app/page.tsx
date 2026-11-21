@@ -1,5 +1,7 @@
 'use client'
-import { useState, type FormEvent } from 'react'
+import { useState, useCallback, type FormEvent } from 'react'
+
+import Operations from './operations'
 
 type User = { email: string; role: string; customer: string }
 type Case = { id: string; title: string; object_key: string }
@@ -7,6 +9,7 @@ type Plan = { id: string; source: string; observed: string; destination: string;
 type Detail = Case & { plans: Plan[]; timeline: { action: string; at: number; actor: string }[] }
 
 export default function Console() {
+  const [workspace,setWorkspace]=useState(true)
   const [token, setToken] = useState('')
   const [user, setUser] = useState<User | null>(null)
   const [cases, setCases] = useState<Case[]>([])
@@ -14,7 +17,7 @@ export default function Console() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
-  async function request(path: string, auth = token, options: RequestInit = {}) {
+  const request=useCallback(async (path: string, auth = token, options: RequestInit = {}) => {
     const response = await fetch('/api/v1' + path, { ...options, cache: 'no-store',
       headers: { 'Content-Type': 'application/json', ...(auth ? {Authorization: 'Bearer ' + auth} : {}) } })
     if (!response.ok) {
@@ -23,7 +26,7 @@ export default function Console() {
       throw new Error(typeof data.detail === 'string' ? data.detail : 'Request failed (' + response.status + ')')
     }
     return response
-  }
+  },[token])
   async function perform(action: () => Promise<void>) {
     setBusy(true)
     setError('')
@@ -52,7 +55,7 @@ export default function Console() {
     setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
   return <main>
-    <header><strong>AEGIS</strong><span>Local fixture · AWS disconnected</span></header>
+    <header><strong>AEGIS</strong><span>Customer security console</span></header>
     {error && <p className="error" role="alert">{error}</p>}
     {!user ? <section className="login"><h1>Incident console</h1>
       <p>Sign in with your provisioned demo account.</p>
@@ -63,7 +66,9 @@ export default function Console() {
       <button disabled={busy} onClick={() => perform(async () => {
         await request('/auth/logout', token, {method:'POST'}); setUser(null); setToken(''); setCases([]); setDetail(null)
       })}>Sign out</button></nav>
-      <h1>{detail ? detail.title : 'Incidents'}</h1>
+      <div className="tabs"><button aria-pressed={workspace} onClick={()=>setWorkspace(true)}>Security operations</button>
+      <button aria-pressed={!workspace} onClick={()=>setWorkspace(false)}>Single-report fixture</button></div>
+      {workspace?<Operations user={user} token={token} request={request}/>:<><h1>{detail ? detail.title : 'Incidents'}</h1>
       {!detail ? <section><h2>Incident list</h2>{cases.length === 0 ? <p>No incidents recorded for this customer.</p> :
         cases.map(item => <button className="case" key={item.id} disabled={busy} onClick={() => perform(() => openCase(item.id))}>
           {item.title}<small>{item.object_key}</small></button>)}</section> :
@@ -83,7 +88,7 @@ export default function Console() {
             {plan.status === 'verified' && <button disabled={busy} onClick={() => perform(() => download(plan.id))}>Download verified copy</button>}
           </article>)}</section>
         <section><h2>Audit timeline</h2><ol>{detail.timeline.map((event, i) => <li key={i}>
-          <time>{new Date(event.at * 1000).toLocaleTimeString()}</time> {event.action.replaceAll('_',' ')}</li>)}</ol></section></>}
+          <time>{new Date(event.at * 1000).toLocaleTimeString()}</time> {event.action.replaceAll('_',' ')}</li>)}</ol></section></>}</>}
     </>}
   </main>
 }

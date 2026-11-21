@@ -1,57 +1,62 @@
 # AEGIS · ToyGuard
 
-AEGIS helps a customer investigate suspicious file changes and recover a reviewed version. This checkout implements the **single-report local recovery checkpoint** from the [project plan](docs/12-IMPLEMENTATION-PLAN.md).
+AEGIS monitors a customer's existing S3 bucket, explains suspicious file changes and coordinates approved containment and recovery. Two operating modes share the same detection and response workflow. **Replay** uses local synthetic events and copies. **AWS** consumes customer audit events and executes approved jobs through separate customer-owned roles.
 
-## Try the checkpoint with Docker Compose
+## Run the practice workflow
 
-Run from the repository root with Docker Compose installed. For a fresh checkout, create the local database setting once:
+From the repository root, with Docker Compose installed:
 
 ```sh
 (test -e .env || (umask 077 && printf 'AEGIS_DB_PASSWORD=%s\n' "$(openssl rand -hex 24)" > .env))
 docker compose up --build -d --wait
-docker compose exec api python -m aegis.demo
+docker compose exec api python -m aegis.demo --customer demo
 ```
 
-The last command prints generated passwords for three demo accounts on first creation. Keep them for this local demo. Visit [the console](http://localhost:3000), sign in as the viewer and inspect the empty incident list. Then add one synthetic case:
+Account provisioning prints each newly created account and its password once. Repeating the command keeps existing accounts. Open [the console](http://localhost:3000).
 
-```sh
-docker compose exec api python -m aegis.demo --case
-```
+1. Sign in as the demo administrator. In **Connections**, select **Add practice bucket**. Run **routine**, then **bulk**. Open **Activity** to see the changes. Neither scenario alone should open an incident.
+2. Run **correlated**. Open **Incidents** and inspect the score, affected keys, actor and earlier activity. Replay time advances in separate five-minute intervals so the scenarios can be rehearsed quickly.
+3. Select **Preview restriction**, review its scope, then **approve**. The local worker records a simulated containment result. Alternatively, enter a reason and choose **Skip containment**.
+4. Select two affected files and choose **Preview selected recovery**. Expand the items to review source versions, checksums and recovery destinations. Approve, wait for verification, and download a recovered file.
+5. Reverse an applied restriction, close the incident with a reason and select **Export evidence**. To try role boundaries, sign in as the analyst to prepare a preview or the viewer to read a case. Only the customer administrator can approve.
+6. For the earlier single-report fixture, run `docker compose exec api python -m aegis.demo --customer demo --case` and open **Single-report fixture**.
 
-1. Sign out and sign in as the analyst. Open **Synthetic report revision** and choose **Prepare preview**. Review the pinned source version, destination, digest and expiry.
-2. Sign in as the administrator, open the same case and approve that version. Open the verified file and review the audit timeline.
-3. Sign in as the viewer. A viewer can inspect the case and download a verified copy. Only the administrator can approve a pending plan.
-4. To rehearse customer isolation, provision a second set of accounts with `python -m aegis.demo --customer second` inside the API container. The second customer starts with an empty case list.
+Stop the services with `docker compose down`. The named database volume retains cases and decisions.
 
-Each explicit `--case` adds a fresh case. Re-running account provisioning preserves existing passwords. Stop the demo with `docker compose down`. The named PostgreSQL volume retains its state.
+## Local development
 
-## Local development without Docker
-
-From `backend/`, with Python 3.12 and a virtual environment active:
+From `backend/`, activate a Python 3.12 virtual environment, then run:
 
 ```sh
 python -m pip install -r requirements-test.txt
 alembic upgrade head
-python -m aegis.demo --case
+python -m aegis.demo --customer demo
 python -m unittest discover -s tests -v
 uvicorn aegis.main:app --port 8000
 ```
 
-The local default is SQLite. Compose selects PostgreSQL via `DATABASE_URL`. The API exposes [interactive endpoint documentation](http://localhost:8000/docs). Tests create a temporary SQLite database. To exercise the PostgreSQL tests, supply `AEGIS_EMPTY_TEST_DATABASE` pointing to a dedicated empty test database.
-
-In a separate terminal, from `frontend/` with Node 24:
+In a second terminal with the same environment and working directory, run `python -m aegis.worker`. A single worker invocation with `--once` performs one pass. In a third terminal, run the frontend from `frontend/` with Node 24:
 
 ```sh
 npm ci
 API_ORIGIN=http://127.0.0.1:8000 npm run dev
 ```
 
-## Implementation boundary
+The local database defaults to SQLite. Compose uses PostgreSQL. The tests use an isolated temporary database unless `AEGIS_EMPTY_TEST_DATABASE` names a dedicated empty PostgreSQL database. See the [API reference](http://localhost:8000/docs) while the backend is running.
 
-- The console and API use real database records, server-checked customer roles and expiring, revocable opaque bearer sessions. Provisioning is available through the local operator command. The browser keeps the session token in memory and a reload requires signing in again.
-- The fixture records two harmless versions and a reference digest for a synthetic report. The recovery preview expires after 15 minutes. Approval, copy and verification execute in one local database transaction. The recovered record is separate from both source versions.
-- This checkpoint exercises a known case supplied by the fixture. Delivery from AWS, automatic detection, S3 recovery, distributed workers, containment and Slack delivery belong to later milestones. The local verification does not establish any of those cloud capabilities.
+## Connect a customer
 
-## Next acceptance gate
+Follow the [Guardian onboarding and operations guide](guardian/README.md). The customer supplies an existing versioned bucket. The template creates AEGIS-specific monitoring resources, roles and a recovery destination. Test-role containment is opt-in. The application running on the customer's infrastructure needs no changes.
 
-Independently deploy MediCore, connect one selected versioned S3 bucket and observe one real report change through the queue. Preserve the existing preview and approval behavior when introducing the cloud storage adapter. Cloud execution needs per-item durable work and reconciliation after an interrupted external write.
+## How this implementation fits the plan
+
+| Capability | Implementation |
+|---|---|
+| Monitoring | CloudTrail S3 data events arrive through EventBridge and SQS. One event stream supplies both the operation and actor evidence. The consumer stores events before acknowledgement. |
+| Detection | Fixed five-minute windows group distinct changes by connection and actor. Canary, declared read-only identity, bulk changes, related copies and deletions, and optional synthetic sample randomness contribute to an explainable score. The incident threshold is 60. |
+| Response | A persisted case records review, approval, expiry, verification, reversal and closure. A restricted test role and unaffected control role provide scoped AWS verification. |
+| Recovery | Operator-provided trusted version IDs and SHA-256 values bind each approved source to a unique destination. A worker resumes one selected file at a time and reads each destination back. A file must fit within the five MiB prototype limit. |
+| Operator interface | Customer-scoped console, live change notifications with periodic refresh, evidence export, and optional Slack and Jira deliveries. |
+| Background execution | One Python worker consumes the queue and durable SQL jobs. The prototype runs without a separate Redis or Celery service. |
+
+The full design remains in [the project plan](docs/12-IMPLEMENTATION-PLAN.md). The local acceptance tests cover role isolation, fixture recovery, replay detection and response, plus AWS adapter behavior with test doubles. A live AWS rehearsal, external notification receipt and measured end-to-end cloud latency require a configured customer sandbox.

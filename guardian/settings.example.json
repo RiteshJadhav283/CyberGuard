@@ -1,0 +1,15 @@
+{
+  "account": "111122223333",
+  "region": "us-east-1",
+  "bucket": "example-customer-reports",
+  "prefix": "reports/",
+  "recovery_bucket": "example-aegis-recovery",
+  "queue_name": "customer-event-queue",
+  "external_id": "replace-with-a-unique-customer-value",
+  "monitor_role": "arn:aws:iam::111122223333:role/example-observer",
+  "recovery_role": "arn:aws:iam::111122223333:role/example-recovery",
+  "canary": "reports/decoy.txt",
+  "read_only_actors": [],
+  "trusted": {},
+  "slack_env": ""
+}
