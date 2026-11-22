@@ -6,10 +6,11 @@ import {
   Activity,
   GitCompare,
   ShieldAlert,
-  Server
+  Server,
+  Zap
 } from 'lucide-react'
 
-export type TabKey = 'Overview' | 'Activity' | 'Comparison' | 'Incidents' | 'Connections'
+export type TabKey = 'Overview' | 'Activity' | 'AttackLab' | 'Comparison' | 'Incidents' | 'Connections'
 
 interface NavigationRailProps {
   currentTab: TabKey
@@ -24,9 +25,10 @@ export default function ConsoleNavigationRail({
   incidentCount,
   hasCriticalAlert
 }: NavigationRailProps) {
-  const items: { key: TabKey; label: string; icon: React.ComponentType<{ style?: React.CSSProperties }>; badge?: number; alert?: boolean }[] = [
+  const items: { key: TabKey; label: string; icon: React.ComponentType<{ style?: React.CSSProperties }>; badge?: number; alert?: boolean; chip?: string }[] = [
     { key: 'Overview', label: 'Overview', icon: LayoutDashboard },
     { key: 'Activity', label: 'Live Activity', icon: Activity },
+    { key: 'AttackLab', label: 'Attack Lab', icon: Zap, chip: 'Live' },
     { key: 'Comparison', label: 'Comparison', icon: GitCompare },
     { key: 'Incidents', label: 'Incidents', icon: ShieldAlert, badge: incidentCount, alert: hasCriticalAlert },
     { key: 'Connections', label: 'Connections', icon: Server }
@@ -91,6 +93,12 @@ export default function ConsoleNavigationRail({
                 <Icon style={{ width: '16px', height: '16px', color: isActive ? 'var(--brand-navy)' : 'var(--text-dim)' }} />
                 <span>{item.label}</span>
               </div>
+
+              {item.chip && (
+                <span className="badge badge-amber font-mono" style={{ padding: '0.1rem 0.35rem', fontSize: '0.625rem', fontWeight: 700 }}>
+                  {item.chip}
+                </span>
+              )}
 
               {item.badge !== undefined && item.badge > 0 && (
                 <span className={`badge ${item.alert ? 'badge-red' : 'badge-cyan'}`} style={{ padding: '0.1rem 0.4rem', fontSize: '0.65rem' }}>

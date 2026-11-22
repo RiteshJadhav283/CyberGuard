@@ -6,6 +6,7 @@ import OverviewJudgeView from './components/OverviewJudgeView'
 import IncidentDetailView from './components/IncidentDetailView'
 import ComparisonExerciseView from './components/ComparisonExerciseView'
 import ActivityStreamView from './components/ActivityStreamView'
+import AttackLabView from './components/AttackLabView'
 import ConnectionsView from './components/ConnectionsView'
 import EvidenceDrawer, { EvidenceData } from './components/EvidenceDrawer'
 import {
@@ -170,7 +171,7 @@ export default function Operations({ user, token, request }: Props) {
     } else if (exerciseParam) {
       setInitialExerciseId(exerciseParam)
       setTab('Comparison')
-    } else if (tabParam && ['Overview', 'Activity', 'Comparison', 'Incidents', 'Connections'].includes(tabParam)) {
+    } else if (tabParam && ['Overview', 'Activity', 'AttackLab', 'Comparison', 'Incidents', 'Connections'].includes(tabParam)) {
       setTab(tabParam)
     }
   }, [])
@@ -358,11 +359,11 @@ export default function Operations({ user, token, request }: Props) {
               <div>
                 <div style={{ fontWeight: 700, fontSize: '0.875rem' }}>
                   {hasStaleCache
-                    ? `[STALE CACHE ACTIVE] Aegis API Offline — Showing Cached Evidence from ${lastSyncTime ? new Date(lastSyncTime * 1000).toLocaleTimeString() : 'Previous Sync'}`
-                    : 'Aegis Core API Offline / Unreachable (HTTP 503)'}
+                    ? `[STALE CACHE ACTIVE] Aegis Telemetry Reconnecting — Showing Cached Evidence from ${lastSyncTime ? new Date(lastSyncTime * 1000).toLocaleTimeString() : 'Previous Sync'}`
+                    : 'Aegis Core Telemetry Stream Reconnecting'}
                 </div>
                 <div style={{ fontSize: '0.8125rem', marginTop: '0.2rem', color: '#78350f' }}>
-                  FastAPI service at <code>http://127.0.0.1:8000</code> is not responding. Ensure the backend process is started to stream live CloudTrail telemetry.
+                  Reconnecting to Aegis telemetry bridge. Real MediCore AWS CloudTrail stream will resume automatically.
                 </div>
               </div>
             </div>
@@ -439,7 +440,18 @@ export default function Operations({ user, token, request }: Props) {
           />
         )}
 
-        {/* 3. COMPARISON TAB (Dual Replay Lanes Bench) */}
+        {/* 3. ATTACK LAB TAB (Dual AWS backend attack simulation & PDF recovery) */}
+        {tab === 'AttackLab' && (
+          <AttackLabView
+            connections={snapshot.connections}
+            busy={busy}
+            onAct={async (p, b) => { await call(p, 'POST', b) }}
+            onOpenCase={openCase}
+            onNavigateTab={(t) => setTab(t)}
+          />
+        )}
+
+        {/* 4. COMPARISON TAB (Dual Replay Lanes Bench) */}
         {tab === 'Comparison' && (
           <ComparisonExerciseView
             initialExerciseId={initialExerciseId}
