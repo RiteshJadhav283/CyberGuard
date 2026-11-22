@@ -49,6 +49,8 @@ export default function AttackLabView({
   const [selectedScenario, setSelectedScenario] = useState('ransomware-extortion-pdf')
   const [executing, setExecuting] = useState(false)
   const [executionStep, setExecutionStep] = useState<number>(0)
+  const [attackExecuted, setAttackExecuted] = useState<string | null>(null)
+  const [executedAt, setExecutedAt] = useState<string | null>(null)
   
   // Execution logs for both lanes
   const [baselineLogs, setBaselineLogs] = useState<string[]>([
@@ -202,6 +204,8 @@ export default function AttackLabView({
     } finally {
       setExecuting(false)
       setExecutionStep(0)
+      setAttackExecuted(selectedScenario)
+      setExecutedAt(new Date().toLocaleTimeString())
     }
   }
 
@@ -422,12 +426,79 @@ export default function AttackLabView({
         </div>
       </div>
 
-      {/* LIVE ARTIFACT & DOCUMENT INSPECTION BENCH (Dynamic Across All 6 Scenarios) */}
+      {/* LIVE ARTIFACT & DOCUMENT INSPECTION BENCH (Pre-Attack Armed vs Post-Attack Proof of Impact) */}
+      {attackExecuted !== selectedScenario ? (
+        <div className="soc-card" style={{ padding: '1.5rem', background: '#fff', border: '2px solid #cbd5e1' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                <span className="badge badge-amber" style={{ fontWeight: 800 }}>STANDBY · TARGET ARMED</span>
+                <h2 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, color: 'var(--brand-navy)' }}>
+                  Inspection Bench: <code>{currentScenario.targetDoc}</code> Armed for Exploit
+                </h2>
+              </div>
+              <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                Target: <strong>{currentScenario.targetDoc}</strong> · Vector: <strong>{currentScenario.vector}</strong>. Both AWS backends are active. Click the red <strong>"Execute Dual Attack on Both Backends"</strong> button above to launch this attack and observe side-by-side resilience in real time.
+              </p>
+            </div>
+
+            <button
+              onClick={handleExecuteDualAttack}
+              disabled={executing || busy}
+              className="btn-danger"
+              style={{ padding: '0.5rem 1rem', fontSize: '0.775rem', fontWeight: 700 }}
+            >
+              <Zap style={{ width: '14px', height: '14px' }} /> Launch Attack Vector Now
+            </button>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+            {/* Baseline Standby Target */}
+            <div style={{ border: '2px solid #cbd5e1', borderRadius: '8px', background: '#f8fafc', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem' }}>
+                <div style={{ fontWeight: 700, fontSize: '0.8125rem', color: '#334155', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Server style={{ width: '15px', height: '15px', color: '#64748b' }} />
+                  MediCore Baseline Target (Unsecured)
+                </div>
+                <span className="badge badge-amber" style={{ fontSize: '0.675rem' }}>ZERO TRIPWIRES</span>
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#475569', lineHeight: 1.6 }}>
+                <div><strong>Target S3 Bucket:</strong> <code>s3://synthetic-baseline-medicore-017080036675</code></div>
+                <div><strong>Target Asset:</strong> <code>{currentScenario.targetDoc}</code></div>
+                <div><strong>Defense Posture:</strong> Standard AWS S3. Zero active canary tripwires. Standard CloudTrail polling (~15 min latency).</div>
+                <div style={{ color: '#b91c1c', marginTop: '0.35rem' }}><strong>Vulnerability:</strong> Target object will suffer immediate uncontained compromise once vector is fired.</div>
+              </div>
+            </div>
+
+            {/* Aegis Protected Standby Target */}
+            <div style={{ border: '2px solid #38bdf8', borderRadius: '8px', background: '#f0f9ff', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #bae6fd', paddingBottom: '0.5rem' }}>
+                <div style={{ fontWeight: 700, fontSize: '0.8125rem', color: '#0369a1', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <ShieldCheck style={{ width: '15px', height: '15px', color: '#0284c7' }} />
+                  MediCore Protected Target (Aegis Guardian Active)
+                </div>
+                <span className="badge badge-cyan" style={{ fontSize: '0.675rem' }}>SENSORS ONLINE</span>
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#0369a1', lineHeight: 1.6 }}>
+                <div><strong>Monitored S3 Bucket:</strong> <code>s3://medicore-aegis-demo-017080036675</code></div>
+                <div><strong>Monitored Asset:</strong> <code>{currentScenario.targetDoc}</code></div>
+                <div><strong>Defense Posture:</strong> Sub-second EventBridge CloudTrail filter active · 3 Decoy canaries armed · Isolated recovery vault.</div>
+                <div style={{ color: '#059669', marginTop: '0.35rem' }}><strong>SLA Guarantee:</strong> Threat detection and Scoped IAM Deny containment within 2.0s. Clean artifact preserved.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
       <div className="soc-card" style={{ padding: '1.5rem', background: '#fff', border: '2px solid #0284c7' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
               <span className="badge badge-cyan" style={{ fontWeight: 800 }}>LIVE PROOF OF IMPACT</span>
+              {executedAt && (
+                <span className="badge badge-emerald" style={{ fontSize: '0.675rem' }}>
+                  EXECUTED AT {executedAt}
+                </span>
+              )}
               <h2 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, color: 'var(--brand-navy)' }}>
                 {selectedScenario === 'ransomware-extortion-pdf' && <>Medical Document Inspection Bench: <code>report-41-diagnostic.pdf</code> (#REP-41)</>}
                 {selectedScenario === 'canary-overwrite' && <>Decoy Tripwire Integrity Bench: <code>.aegis-canaries/.../check-2.txt</code></>}
@@ -920,6 +991,7 @@ export default function AttackLabView({
           </div>
         </div>
       </div>
+      )}
 
       {/* Side-by-Side Comparative Scorecard */}
       <div className="soc-card" style={{ padding: '1.5rem', background: '#fff' }}>
