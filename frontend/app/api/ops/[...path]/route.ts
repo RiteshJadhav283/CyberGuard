@@ -9,70 +9,163 @@ const RECOVERED_CONTENT = Buffer.from(
   'utf-8'
 )
 
-// Generates valid, readable 1-page PDF document
-function generateValidMedicalPDF(): Buffer {
+// Generates realistic ransomware defaced extortion PDF demanding ransom to unlock files
+function generateRansomwareExtortionPDF(): Buffer {
   const streamContent = 
 `BT
 /F1 18 Tf
 50 740 Td
-(MEDICORE REGIONAL HEALTH SYSTEM) Tj
+(!!! ALL YOUR MEDICAL FILES HAVE BEEN ENCRYPTED !!!) Tj
+0 -24 Td
+/F1 13 Tf
+(DARKSURGE RANSOMWARE v4.2 - CRITICAL SYSTEM COMPROMISE) Tj
+0 -20 Td
+(======================================================================) Tj
 0 -22 Td
 /F2 11 Tf
-(CLINICAL DIAGNOSTIC LABORATORY REPORT) Tj
+(ATTENTION HOSPITAL ADMINISTRATION & IT SECURITY:) Tj
 0 -18 Td
+(All clinical diagnostics, patient histories, and medical scans in this repository,) Tj
+0 -16 Td
+(including Report #REP-41 (Patient: John Doe, ID: P-1), have been encrypted with) Tj
+0 -16 Td
+(military-grade AES-256-GCM. Your local backups have been neutralized.) Tj
+0 -24 Td
+(======================================================================) Tj
+0 -22 Td
+/F1 13 Tf
+(RANSOM DEMAND TO UNLOCK AND RECOVER YOUR FILES:) Tj
+0 -20 Td
+/F1 12 Tf
+(  AMOUNT TO PAY:   5.0 BITCOIN (BTC)  [~ $350,000 USD]) Tj
+0 -18 Td
+/F2 10 Tf
+(  SEND PAYMENT TO: bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh) Tj
+0 -16 Td
+(  VICTIM IDENTIFIER: MEDICORE-AP-SOUTH-1-REP41-VICTIM) Tj
+0 -16 Td
+(  CONTACT EMAIL:     darksurge-decrypt@onionmail.org) Tj
+0 -24 Td
+(======================================================================) Tj
+0 -20 Td
+/F1 11 Tf
+(TIME REMAINING: 23 HOURS 59 MINUTES 59 SECONDS) Tj
+0 -16 Td
+/F2 10 Tf
+(If payment is not confirmed on the blockchain before the deadline expires,) Tj
+0 -14 Td
+(the private decryption key will be permanently purged, and all patient records) Tj
+0 -14 Td
+(will be published on the Dark Web Tor leak portal.) Tj
+0 -24 Td
+(DO NOT ATTEMPT TO RENAME OR DECRYPT FILES MANUALLY - DATA LOSS WILL BE FATAL.) Tj
+ET`
+
+  const streamLength = Buffer.byteLength(streamContent, 'utf-8')
+
+  const pdfBody = `%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length ${streamLength} >>
+stream
+${streamContent}
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000234 00000 n 
+0000001750 00000 n 
+0000001833 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+1912
+%%EOF`
+
+  return Buffer.from(pdfBody, 'utf-8')
+}
+
+// Generates authentic E-Health clinical report matching user's #REP-41 diagnostic report
+function generateCleanEHealthMedicalPDF(): Buffer {
+  const streamContent = 
+`BT
+/F1 16 Tf
+50 740 Td
+(E-HEALTH MANAGEMENT HUB) Tj
+0 -18 Td
+/F2 9 Tf
+(HOSPITAL & PATIENT HEALTHCARE MANAGEMENT SYSTEM) Tj
+0 -16 Td
+(Official Clinical Medical Record) Tj
+0 -20 Td
 (======================================================================) Tj
 0 -18 Td
-/F1 10 Tf
-(PATIENT INFORMATION) Tj
-0 -14 Td
-/F2 10 Tf
-(Name: Sarah Jenkins               Patient ID: #1002-MED-94021) Tj
-0 -14 Td
-(Age / Gender: 42 / F              Collection Date: 2026-11-22 06:45 UTC) Tj
-0 -14 Td
-(Attending Physician: Dr. Marcus Vance, Chief of Hematology) Tj
-0 -14 Td
-(Facility: MediCore AP-South-1 Regional Medical Center) Tj
+/F1 11 Tf
+(PATIENT EXAMINATION & DIAGNOSTIC REPORT                     Generated: 22/11/2026) Tj
 0 -20 Td
 (======================================================================) Tj
 0 -18 Td
 /F1 10 Tf
-(DIAGNOSTIC TEST RESULTS: COMPLETE BLOOD COUNT & METABOLIC PANEL) Tj
+(PATIENT INFORMATION                                 CONSULTATION DETAILS) Tj
 0 -16 Td
 /F2 9.5 Tf
-(  Test Name                Result        Reference Range    Status) Tj
+(Patient Name: John Doe                              Report ID: #REP-41) Tj
 0 -14 Td
-(  ------------------------------------------------------------------) Tj
-0 -13 Td
-(  Hemoglobin               14.2 g/dL     12.0 - 15.5 g/dL   NORMAL) Tj
-0 -13 Td
-(  White Blood Cells (WBC)  6.8 K/uL      4.5 - 11.0 K/uL    NORMAL) Tj
-0 -13 Td
-(  Platelet Count           240 K/uL      150 - 450 K/uL     NORMAL) Tj
-0 -13 Td
-(  Fasting Plasma Glucose   94 mg/dL      70 - 99 mg/dL      NORMAL) Tj
-0 -13 Td
-(  Serum Creatinine         0.85 mg/dL    0.59 - 1.04 mg/dL  NORMAL) Tj
-0 -13 Td
-(  Blood Urea Nitrogen      14 mg/dL      7 - 20 mg/dL       NORMAL) Tj
-0 -18 Td
+(Patient ID:   P-1                                   Date & Time: 17/5/2026 at 16:45:00) Tj
+0 -14 Td
+(Age / Gender: 28 yrs / M                            Doctor: Dr. Joseph Torres (General Medicine)) Tj
+0 -22 Td
 (======================================================================) Tj
 0 -18 Td
 /F1 10 Tf
-(AEGIS GUARDIAN DATA INTEGRITY AUDIT) Tj
+(1. CLINICAL VITALS) Tj
+0 -16 Td
+/F2 9.5 Tf
+(  Temperature: 98.5 F          Blood Pressure: 132/84 mmHg) Tj
 0 -14 Td
-/F2 9 Tf
-(Security Posture: ZERO DATA LOSS - TAMPER-PROOF VAULT RECOVERY) Tj
-0 -13 Td
-(Pre-Attack Cryptographic SHA-256 Checksum:) Tj
-0 -13 Td
-(86c31cf8174c58a24c9a3b2c00dbe70549426b7597611a5cd5f10ebfdbd950fc) Tj
-0 -13 Td
-(Intervention: Automated Scoped IAM Deny attached in 1.84s (Target: <5.00s)) Tj
-0 -13 Td
-(Attacker Identity Quarantined: arn:aws:iam::017080036675:role/medicore-test-writer) Tj
-0 -13 Td
-(Clinical EHR Access for Authorized Medical Staff: 100% UNINTERRUPTED) Tj
+(  Weight:      94.6 kg          Blood Glucose:  106 mg/dL) Tj
+0 -22 Td
+(======================================================================) Tj
+0 -18 Td
+/F1 10 Tf
+(2. DIAGNOSIS & CLINICAL NOTES) Tj
+0 -16 Td
+/F2 9.5 Tf
+(  Primary Diagnosis: Lumbar Spondylosis) Tj
+0 -14 Td
+(  Physician Notes:   Clinical examination complete. Diagnosed with Lumbar Spondylosis.) Tj
+0 -14 Td
+(                     Patient advised to follow prescribed regimen strictly.) Tj
+0 -22 Td
+(======================================================================) Tj
+0 -18 Td
+/F1 10 Tf
+(AEGIS GUARDIAN DATA INTEGRITY CONFIRMATION) Tj
+0 -14 Td
+/F2 8.5 Tf
+(Status: Verified Clean Recovery - Tamper Attempt Isolated via Scoped IAM Deny in 1.84s) Tj
+0 -12 Td
+(Cryptographic Checksum: SHA-256 e830b9e136ae8f699ca230eff6a86c73c1d1af9a7f203239e7836e361ed3630a) Tj
+0 -12 Td
+(E-Health Management Hub - Computer generated clinical report - Valid without physical signature) Tj
 ET`
 
   const streamLength = Buffer.byteLength(streamContent, 'utf-8')
@@ -115,31 +208,6 @@ startxref
 %%EOF`
 
   return Buffer.from(pdfBody, 'utf-8')
-}
-
-// Generates realistic corrupted ransomware encrypted file (unreadable by PDF readers)
-function generateCorruptedRansomwareFile(): Buffer {
-  const extortionNote = `[DARKSURGE_RANSOMWARE_v4.2_FILE_LOCKOUT]
-======================================================================
-FATAL: FILE CANNOT BE PARSED AS VALID PDF FORMAT
-ALL YOUR MEDICAL CLINICAL RECORDS HAVE BEEN ENCRYPTED WITH AES-256-GCM.
-YOUR PRIVATE KEY IS STORED ON DARKSURGE TOR INFRASTRUCTURE.
-KEY ID: MEDICORE-AP-SOUTH-1-LOCKED-94021
-TO PURCHASE THE PRIVATE DECRYPTION KEY:
-1. DOWNLOAD TOR BROWSER: HTTPS://TORPROJECT.ORG
-2. VISIT: http://darksurge7492medicorevictim.onion/ransom/94021
-3. TRANSFER 4.5 BTC BEFORE COUNTDOWN EXPIRES (24:00:00)
-IF RECOVERY KEYS ARE NOT PURCHASED, DATA WILL BE PERMANENTLY DESTROYED.
-======================================================================
-BINARY CIPHERTEXT STREAM (HIGH ENTROPY 7.989 BITS/BYTE):
-`
-  const garbage = Buffer.from([
-    0xda, 0x4b, 0x53, 0x75, 0x72, 0x67, 0x65, 0x00, 0xff, 0xc0, 0xde, 0xad,
-    0xbe, 0xef, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x12, 0x34,
-    0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0, 0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54,
-    0x32, 0x10, 0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0x55, 0xaa
-  ])
-  return Buffer.concat([Buffer.from(extortionNote, 'utf-8'), garbage])
 }
 
 const LIVE_CONNECTION = {
@@ -614,19 +682,19 @@ export async function handleRequest(req: NextRequest, context: { params: Promise
   // GET /documents/download (Medical PDF inspection bench download)
   if (root === 'documents' && path[1] === 'download') {
     const target = req.nextUrl.searchParams.get('target') || 'protected'
-    const docName = req.nextUrl.searchParams.get('doc') || 'patient-1002-diagnostic.pdf'
+    const docName = req.nextUrl.searchParams.get('doc') || 'report-41-diagnostic.pdf'
 
     if (target === 'baseline') {
-      const corruptFile = generateCorruptedRansomwareFile()
-      return new NextResponse(new Uint8Array(corruptFile), {
+      const ransomPdf = generateRansomwareExtortionPDF()
+      return new NextResponse(new Uint8Array(ransomPdf), {
         headers: {
-          'Content-Type': 'application/octet-stream',
-          'Content-Disposition': `attachment; filename="${docName}.encrypted"`
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `attachment; filename="${docName.replace(/\.pdf$/, '')}-RANSOMWARE-DEMAND.pdf"`
         }
       })
     }
 
-    const cleanPdf = generateValidMedicalPDF()
+    const cleanPdf = generateCleanEHealthMedicalPDF()
     return new NextResponse(new Uint8Array(cleanPdf), {
       headers: {
         'Content-Type': 'application/pdf',

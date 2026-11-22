@@ -20,7 +20,8 @@ import {
   Database,
   ExternalLink,
   Eye,
-  FileX
+  FileX,
+  DollarSign
 } from 'lucide-react'
 
 interface Conn {
@@ -45,9 +46,8 @@ export default function AttackLabView({
   onOpenCase,
   onNavigateTab
 }: AttackLabProps) {
-  const [selectedScenario, setSelectedScenario] = useState('ransomware-pdf')
+  const [selectedScenario, setSelectedScenario] = useState('ransomware-extortion-pdf')
   const [executing, setExecuting] = useState(false)
-  const [activeTab, setActiveTab] = useState<'both' | 'protected' | 'baseline'>('both')
   const [executionStep, setExecutionStep] = useState<number>(0)
   
   // Execution logs for both lanes
@@ -64,22 +64,18 @@ export default function AttackLabView({
     '[STATUS] Ready to intercept adversarial activity and enforce automated isolation...'
   ])
 
-  // Document state after attack
-  const [hasExecuted, setHasExecuted] = useState(false)
-  const [activeViewer, setActiveViewer] = useState<'diagnostic' | 'hex' | 'note'>('diagnostic')
-
   const scenarios = [
     {
-      id: 'ransomware-pdf',
-      title: 'Ransomware S3 Document Encryption & Destruction',
-      targetDoc: 'patient-1002-diagnostic.pdf',
+      id: 'ransomware-extortion-pdf',
+      title: 'Ransomware S3 PDF Defacement & Extortion ("Pay 5.0 BTC to Unlock")',
+      targetDoc: 'report-41-diagnostic.pdf (#REP-41, Patient: John Doe)',
       severity: 'CRITICAL',
       badgeClass: 'badge-red',
       score: '95 / 100',
-      vector: 'Malicious AES-256 Ciphertext Overwrite',
-      description: 'Attacker compromises designated storage credentials and uploads high-entropy AES ciphertext directly overwriting critical patient diagnostic records.',
-      baselineOutcome: 'PDF destroyed permanently. Hospital EHR encounters 403 parse errors. Attack undetected until ransom extortion note discovered.',
-      aegisOutcome: 'CloudTrail trap fires in 320ms. Attacker IAM Deny attached in 1.84s. Clean pre-incident PDF verified and staged to recovery vault.'
+      vector: 'S3 PutObject Ransomware Extortion Note Overwrite',
+      description: 'Attacker defaces and replaces clinical examination report #REP-41 with a red ransom extortion note demanding 5.0 BTC ($350,000 USD) to release hospital storage keys.',
+      baselineOutcome: 'PDF is permanently overwritten with the ransom extortion demand. Doctors and patients opening the report see "PAY 5.0 BTC TO UNLOCK YOUR FILES".',
+      aegisOutcome: 'Aegis canary tripwire detects unauthorized overwrite. Attacker role quarantined in 1.84s. Clean E-Health diagnostic report #REP-41 restored immediately.'
     },
     {
       id: 'canary-overwrite',
@@ -148,7 +144,6 @@ export default function AttackLabView({
   async function handleExecuteDualAttack() {
     setExecuting(true)
     setExecutionStep(1)
-    setHasExecuted(true)
 
     const now = new Date().toLocaleTimeString()
 
@@ -156,7 +151,7 @@ export default function AttackLabView({
     setBaselineLogs(prev => [
       `[${now}] ATTACK LAUNCHED: Attacker executing ${currentScenario.title}...`,
       `[${now}] TARGET: s3://synthetic-baseline-medicore-017080036675/${currentScenario.targetDoc}`,
-      `[${now}] PAYLOAD: Uploading AES-256 ciphertext chunk (Entropy: 7.989 bits/byte)...`,
+      `[${now}] PAYLOAD: Overwriting medical PDF with Ransom Extortion Note demanding 5.0 BTC...`,
       ...prev
     ])
 
@@ -174,9 +169,9 @@ export default function AttackLabView({
 
     setBaselineLogs(prev => [
       `[${t2}] S3 WRITE ACCEPTED: PutObject HTTP 200 OK recorded.`,
-      `[${t2}] UNPROTECTED OUTCOME: S3 file ${currentScenario.targetDoc} overwritten with unreadable ciphertext!`,
+      `[${t2}] UNPROTECTED OUTCOME: S3 file ${currentScenario.targetDoc} overwritten with Ransomware Extortion Note!`,
       `[${t2}] DEFENSE POSTURE: Zero tripwires configured. CloudTrail standard batch polling (~15 min latency).`,
-      `[${t2}] RESULT: Attacker retains full write access. Data loss permanent.`,
+      `[${t2}] RESULT: Doctors opening #REP-41 will see "PAY 5.0 BTC TO UNLOCK". Data loss permanent.`,
       ...prev
     ])
 
@@ -195,14 +190,13 @@ export default function AttackLabView({
     setProtectedLogs(prev => [
       `[${t3}] IAM QUARANTINE APPLIED (T+1.84s): Attached Scoped IAM Deny to role/medicore-test-writer.`,
       `[${t3}] BLAST RADIUS RESTRICTED: Attacker subsequent writes rejected with HTTP 403 AccessDenied!`,
-      `[${t3}] AUTOMATED RECOVERY: Verified clean pre-incident version restored from recovery vault.`,
+      `[${t3}] AUTOMATED RECOVERY: Restored clean E-Health diagnostic report #REP-41 (John Doe, Lumbar Spondylosis).`,
       `[${t3}] INTEGRITY CHECK: SHA-256 e830b9e136ae8f699ca230eff6a86c73c1d1af9a7f203239e7836e361ed3630a MATCHED.`,
       `[${t3}] CLINICAL PIPELINE: Legitimate doctor workflow remains 100% unblocked and operational.`,
       ...prev
     ])
 
     try {
-      // Dispatch real API call to execute attack simulation on server
       await onAct('/attacks/dual-run', { scenario: selectedScenario })
     } catch (_) {
       // Fallback works smoothly
@@ -213,7 +207,7 @@ export default function AttackLabView({
   }
 
   function handleDownloadFile(target: 'baseline' | 'protected') {
-    const downloadUrl = `/api/ops/documents/download?target=${target}&doc=${encodeURIComponent(currentScenario.targetDoc)}`
+    const downloadUrl = `/api/ops/documents/download?target=${target}&doc=report-41-diagnostic.pdf`
     window.open(downloadUrl, '_blank')
   }
 
@@ -227,12 +221,12 @@ export default function AttackLabView({
               <Zap style={{ width: '18px', height: '18px', color: '#dc2626' }} />
             </div>
             <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, color: 'var(--brand-navy)' }}>
-              Dual-Backend Attack Lab & Document Verification
+              Dual-Backend Attack Lab & Ransomware Simulation
             </h1>
           </div>
           <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.875rem', maxWidth: '850px', lineHeight: 1.5 }}>
-            Simulate live cyber attacks simultaneously across <strong>both AWS backend environments</strong> in <code>ap-south-1</code>.
-            Directly compare how the <strong>Unsecured Baseline</strong> suffers permanent document destruction while <strong>Aegis Protected</strong> isolates the attacker in 1.84s and restores the authentic clinical PDF.
+            Simulate live ransomware attacks across <strong>both AWS backend environments</strong> in <code>ap-south-1</code>.
+            Directly test how an attacker modifies <strong>Patient Report #REP-41</strong> with an extortion note demanding <strong>5.0 BTC</strong> to unlock files on the unsecured site, while <strong>Aegis Protected</strong> quarantines the attacker in 1.84s and restores the authentic clinical PDF.
           </p>
         </div>
 
@@ -275,8 +269,8 @@ export default function AttackLabView({
               <div style={{ fontWeight: 700, color: '#b91c1c' }}>0 Active (None)</div>
             </div>
             <div>
-              <span style={{ color: '#991b1b', fontWeight: 600 }}>Response Time:</span>
-              <div style={{ fontWeight: 700, color: '#b91c1c' }}>Manual (~4.2 hrs)</div>
+              <span style={{ color: '#991b1b', fontWeight: 600 }}>Ransom Impact:</span>
+              <div style={{ fontWeight: 700, color: '#b91c1c' }}>Defaced (5.0 BTC)</div>
             </div>
             <div>
               <span style={{ color: '#991b1b', fontWeight: 600 }}>Blast Radius:</span>
@@ -310,12 +304,12 @@ export default function AttackLabView({
               <div style={{ fontWeight: 700, color: '#047857' }}>3 Decoy Canaries</div>
             </div>
             <div>
-              <span style={{ color: '#065f46', fontWeight: 600 }}>Response Time:</span>
+              <span style={{ color: '#065f46', fontWeight: 600 }}>Containment:</span>
               <div style={{ fontWeight: 700, color: '#047857' }}>1.84s (Automated)</div>
             </div>
             <div>
-              <span style={{ color: '#065f46', fontWeight: 600 }}>Blast Radius:</span>
-              <div style={{ fontWeight: 700, color: '#047857' }}>0 Legitimate Files</div>
+              <span style={{ color: '#065f46', fontWeight: 600 }}>Clean Recovery:</span>
+              <div style={{ fontWeight: 700, color: '#047857' }}>100% Intact (#REP-41)</div>
             </div>
           </div>
         </div>
@@ -419,18 +413,18 @@ export default function AttackLabView({
         </div>
       </div>
 
-      {/* LIVE MEDICAL PDF INSPECTION BENCH (Crucial User Requirement) */}
+      {/* LIVE MEDICAL PDF INSPECTION BENCH (Extortion Defacement vs Authentic Clean Report) */}
       <div className="soc-card" style={{ padding: '1.5rem', background: '#fff', border: '2px solid #0284c7' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
               <span className="badge badge-cyan" style={{ fontWeight: 800 }}>LIVE PROOF OF IMPACT</span>
               <h2 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, color: 'var(--brand-navy)' }}>
-                Medical Document Inspection Bench: <code>patient-1002-diagnostic.pdf</code>
+                Medical Document Inspection Bench: <code>report-41-diagnostic.pdf</code> (#REP-41)
               </h2>
             </div>
             <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-              Inspect the exact patient diagnostic document across both backends. The unsecured baseline cannot read the file due to ransomware encryption, while Aegis serves the verified readable clinical PDF.
+              Direct comparison of <strong>Patient Examination Report #REP-41</strong>. On the unsecured site, the ransomware replaces the PDF with a red extortion note demanding <strong>5.0 BTC</strong> to unlock files. On the Aegis-protected site, the authentic clinical record is preserved.
             </p>
           </div>
 
@@ -440,7 +434,7 @@ export default function AttackLabView({
               className="btn-secondary"
               style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', color: '#b91c1c', borderColor: '#fca5a5' }}
             >
-              <Download style={{ width: '13px', height: '13px' }} /> Download Baseline File (.encrypted)
+              <Download style={{ width: '13px', height: '13px' }} /> Download Ransomware Defaced PDF
             </button>
             <button
               onClick={() => handleDownloadFile('protected')}
@@ -454,176 +448,205 @@ export default function AttackLabView({
 
         {/* Side-by-Side Document Viewers */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
-          {/* Baseline Document Viewer: Corrupted & Unreadable */}
+          {/* Baseline Document Viewer: Defaced with Ransom Extortion Demand */}
           <div
             style={{
-              border: '1px solid #fca5a5',
+              border: '2px solid #ef4444',
               borderRadius: '8px',
-              background: '#fff5f5',
+              background: '#0f172a',
               overflow: 'hidden',
               display: 'flex',
               flexDirection: 'column'
             }}
           >
             {/* Viewer Header */}
-            <div style={{ background: '#fee2e2', padding: '0.75rem 1rem', borderBottom: '1px solid #fca5a5', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ background: '#7f1d1d', padding: '0.75rem 1rem', borderBottom: '1px solid #b91c1c', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <FileX style={{ width: '16px', height: '16px', color: '#dc2626' }} />
-                <span style={{ fontWeight: 700, fontSize: '0.8125rem', color: '#991b1b' }}>
-                  Non-Secured Baseline Viewer
+                <AlertTriangle style={{ width: '16px', height: '16px', color: '#fca5a5' }} />
+                <span style={{ fontWeight: 700, fontSize: '0.8125rem', color: '#ffffff' }}>
+                  Non-Secured Baseline Viewer (Ransomware Defaced)
                 </span>
               </div>
-              <span className="badge badge-red" style={{ fontSize: '0.675rem' }}>
-                UNREADABLE / ENCRYPTED
+              <span className="badge badge-red" style={{ fontSize: '0.675rem', background: '#dc2626', color: '#fff' }}>
+                RANSOM DEMAND: 5.0 BTC
               </span>
             </div>
 
-            {/* Viewer Content */}
-            <div style={{ padding: '1.25rem', display: 'grid', gap: '0.85rem' }}>
-              {/* Error banner */}
-              <div style={{ background: '#fef2f2', border: '1px solid #f87171', borderRadius: '6px', padding: '0.75rem', display: 'flex', gap: '0.6rem' }}>
-                <AlertTriangle style={{ width: '18px', height: '18px', color: '#dc2626', flexShrink: 0 }} />
-                <div style={{ fontSize: '0.75rem', color: '#7f1d1d' }}>
-                  <div style={{ fontWeight: 700 }}>EHR Document Parser Failure: Damaged PDF Format</div>
-                  <div style={{ marginTop: '0.15rem' }}>
-                    Document header corrupted by ransomware. PDF signature <code>%PDF-1.4</code> missing or overwritten with AES ciphertext.
-                  </div>
+            {/* Viewer Content (Simulating the Defaced PDF) */}
+            <div style={{ padding: '1.25rem', display: 'grid', gap: '0.85rem', color: '#f8fafc' }}>
+              {/* Ransomware Banner */}
+              <div style={{ background: '#450a0a', border: '1px solid #dc2626', borderRadius: '6px', padding: '0.85rem', textAlign: 'center' }}>
+                <div style={{ color: '#ef4444', fontWeight: 900, fontSize: '0.95rem', letterSpacing: '0.05em' }}>
+                  !!! ALL YOUR CLINICAL MEDICAL FILES HAVE BEEN ENCRYPTED !!!
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#fca5a5', marginTop: '0.2rem' }}>
+                  DARKSURGE RANSOMWARE v4.2 - CRITICAL HOSPITAL STORAGE COMPROMISE
                 </div>
               </div>
 
-              {/* Extortion Notice Preview */}
-              <div style={{ background: '#1e1b4b', border: '1px solid #4338ca', borderRadius: '6px', padding: '0.75rem', color: '#e0e7ff', fontSize: '0.725rem', fontFamily: 'var(--font-mono)', lineHeight: 1.5 }}>
+              {/* Extortion Notice Box */}
+              <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '6px', padding: '0.85rem', fontSize: '0.75rem', lineHeight: 1.5 }}>
                 <div style={{ color: '#f87171', fontWeight: 700, marginBottom: '0.35rem' }}>
-                  [DARKSURGE_RANSOMWARE_v4.2_FILE_LOCKOUT]
+                  ATTENTION HOSPITAL ADMINISTRATION & IT:
                 </div>
-                <div>ALL YOUR CLINICAL RECORDS HAVE BEEN ENCRYPTED WITH AES-256-GCM.</div>
-                <div>KEY ID: MEDICORE-AP-SOUTH-1-LOCKED-94021</div>
-                <div>CONTACT: darksurge@onion.mail · RANSOM: 4.5 BTC</div>
+                <div style={{ color: '#cbd5e1' }}>
+                  All clinical diagnostics, patient histories, and medical scans in this repository, including <strong>Report #REP-41 (Patient: John Doe, ID: P-1)</strong>, have been encrypted with AES-256-GCM.
+                </div>
               </div>
 
-              {/* Raw High-Entropy Hex Dump */}
-              <div>
-                <div style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '0.3rem' }}>
-                  Raw File Header (Entropy: 7.989 bits/byte)
+              {/* Payment Details Box */}
+              <div style={{ background: '#020617', border: '1px solid #dc2626', borderRadius: '6px', padding: '0.85rem', fontSize: '0.75rem', fontFamily: 'var(--font-mono)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#fbbf24', fontWeight: 700, fontSize: '0.825rem', marginBottom: '0.35rem' }}>
+                  <DollarSign style={{ width: '15px', height: '15px', color: '#fbbf24' }} />
+                  <span>RANSOM DEMAND TO UNLOCK AND RECOVER YOUR FILES:</span>
                 </div>
-                <div style={{ background: '#0f172a', borderRadius: '6px', padding: '0.65rem', color: '#f87171', fontFamily: 'var(--font-mono)', fontSize: '0.6875rem', overflowX: 'auto', lineHeight: 1.5 }}>
-                  <code>
-                    00000000: 44 41 52 4b 53 55 52 47 45 5f 52 41 4e 53 4f 4d  DARKSURGE_RANSOM<br />
-                    00000010: 57 41 52 45 5f 76 34 2e 32 5f 4c 4f 43 4b 45 44  WARE_v4.2_LOCKED<br />
-                    00000020: da 4b 53 75 72 67 65 00 ff c0 de ad be ef 88 99  .KSurge.........
-                  </code>
+                <div style={{ color: '#ffffff', fontSize: '0.8rem', fontWeight: 700 }}>
+                  AMOUNT TO PAY: <span style={{ color: '#ef4444' }}>5.0 BITCOIN (BTC)</span> [~ $350,000 USD]
+                </div>
+                <div style={{ color: '#38bdf8', marginTop: '0.3rem', wordBreak: 'break-all' }}>
+                  PAY TO WALLET: <code>bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh</code>
+                </div>
+                <div style={{ color: '#94a3b8', fontSize: '0.7rem', marginTop: '0.4rem' }}>
+                  DEADLINE: <strong>23:59:59</strong> · If payment is not confirmed, decryption key will be destroyed.
                 </div>
               </div>
 
               <div style={{ textAlign: 'center', marginTop: '0.35rem' }}>
                 <button
                   onClick={() => handleDownloadFile('baseline')}
-                  className="btn-secondary"
-                  style={{ width: '100%', justifyContent: 'center', fontSize: '0.75rem', color: '#991b1b', borderColor: '#fca5a5' }}
+                  className="btn-danger"
+                  style={{ width: '100%', justifyContent: 'center', fontSize: '0.75rem', padding: '0.55rem' }}
                 >
-                  <Download style={{ width: '13px', height: '13px' }} /> Download Corrupted File (Verify in PDF Viewer)
+                  <Download style={{ width: '13px', height: '13px' }} /> Download Ransomware Defaced PDF (Open in PDF Viewer)
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Protected Document Viewer: Clean, Readable Diagnostic Report */}
+          {/* Protected Document Viewer: Authentic E-Health Management Hub Diagnostic Report */}
           <div
             style={{
-              border: '1px solid #86efac',
+              border: '2px solid #16a34a',
               borderRadius: '8px',
-              background: '#f0fdf4',
+              background: '#ffffff',
               overflow: 'hidden',
               display: 'flex',
               flexDirection: 'column'
             }}
           >
             {/* Viewer Header */}
-            <div style={{ background: '#dcfce7', padding: '0.75rem 1rem', borderBottom: '1px solid #86efac', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ background: '#184c78', padding: '0.75rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <CheckCircle2 style={{ width: '16px', height: '16px', color: '#16a34a' }} />
-                <span style={{ fontWeight: 700, fontSize: '0.8125rem', color: '#166534' }}>
-                  Aegis Protected Viewer (Clean Recovery)
+                <CheckCircle2 style={{ width: '16px', height: '16px', color: '#86efac' }} />
+                <span style={{ fontWeight: 700, fontSize: '0.8125rem', color: '#ffffff' }}>
+                  Aegis Protected Viewer (Clean Authentic Recovery)
                 </span>
               </div>
-              <span className="badge badge-emerald" style={{ fontSize: '0.675rem' }}>
+              <span className="badge badge-emerald" style={{ fontSize: '0.675rem', background: '#16a34a', color: '#fff' }}>
                 100% READABLE & VERIFIED
               </span>
             </div>
 
-            {/* Viewer Content */}
+            {/* Viewer Content (Simulating the Authentic E-Health Report #REP-41) */}
             <div style={{ padding: '1.25rem', display: 'grid', gap: '0.85rem' }}>
               {/* Integrity Verified Badge */}
-              <div style={{ background: '#ecfdf5', border: '1px solid #34d399', borderRadius: '6px', padding: '0.75rem', display: 'flex', gap: '0.6rem' }}>
+              <div style={{ background: '#ecfdf5', border: '1px solid #34d399', borderRadius: '6px', padding: '0.65rem 0.85rem', display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
                 <ShieldCheck style={{ width: '18px', height: '18px', color: '#059669', flexShrink: 0 }} />
                 <div style={{ fontSize: '0.75rem', color: '#064e3b' }}>
-                  <div style={{ fontWeight: 700 }}>Cryptographic Integrity Confirmed: SHA-256 Pre-Image Match</div>
-                  <div style={{ marginTop: '0.15rem', fontFamily: 'var(--font-mono)', fontSize: '0.6875rem' }}>
-                    SHA-256: 86c31cf8174c58a24c9a3b2c00dbe70549426b7597611a5cd5f10ebfdbd950fc
-                  </div>
+                  <strong>Aegis Safe Recovery:</strong> Attacker quarantined via Scoped IAM Deny in 1.84s · SHA-256 Verified
                 </div>
               </div>
 
-              {/* Rendered Clinical Medical Report */}
-              <div style={{ background: '#ffffff', border: '1px solid #bbf7d0', borderRadius: '6px', padding: '0.9rem', boxShadow: 'var(--shadow-sm)' }}>
-                <div style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem', marginBottom: '0.6rem', display: 'flex', justifyContent: 'space-between' }}>
+              {/* Exact E-Health Hub PDF Layout (matching screenshot) */}
+              <div style={{ border: '1px solid #cbd5e1', borderRadius: '6px', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+                {/* Header Banner */}
+                <div style={{ background: '#184c78', padding: '0.75rem 1rem', color: '#ffffff', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div>
-                    <div style={{ fontWeight: 800, fontSize: '0.8125rem', color: 'var(--brand-navy)' }}>
-                      MEDICORE REGIONAL HEALTH SYSTEM
+                    <div style={{ fontWeight: 800, fontSize: '0.95rem', letterSpacing: '0.02em' }}>
+                      E-HEALTH MANAGEMENT HUB
                     </div>
-                    <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
-                      Clinical Diagnostic Laboratory Report · Facility: ap-south-1
+                    <div style={{ fontSize: '0.65rem', color: '#e0e7ff', marginTop: '0.1rem' }}>
+                      HOSPITAL & PATIENT HEALTHCARE MANAGEMENT SYSTEM
                     </div>
                   </div>
-                  <span className="badge badge-cyan" style={{ fontSize: '0.625rem' }}>MRN: #1002</span>
+                  <div style={{ fontSize: '0.65rem', color: '#e0e7ff', textAlign: 'right' }}>
+                    Official Clinical Medical Record
+                  </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem', fontSize: '0.725rem', marginBottom: '0.6rem' }}>
-                  <div><strong>Patient:</strong> Sarah Jenkins (Age 42, F)</div>
-                  <div><strong>Collection:</strong> 2026-11-22 06:45 UTC</div>
-                  <div><strong>Physician:</strong> Dr. Marcus Vance, MD</div>
-                  <div><strong>Status:</strong> Verified Safe</div>
+                {/* Subheader Title */}
+                <div style={{ background: '#ebf2fa', padding: '0.4rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #cbd5e1' }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.75rem', color: '#1e3a5f' }}>
+                    PATIENT EXAMINATION & DIAGNOSTIC REPORT
+                  </div>
+                  <div style={{ fontSize: '0.68rem', color: '#64748b' }}>
+                    Generated: 22/11/2026
+                  </div>
                 </div>
 
-                <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse', textAlign: 'left' }}>
-                  <thead>
-                    <tr style={{ background: '#f8fafc', color: 'var(--text-dim)', borderBottom: '1px solid #e2e8f0' }}>
-                      <th style={{ padding: '0.3rem' }}>Test Parameter</th>
-                      <th style={{ padding: '0.3rem' }}>Result</th>
-                      <th style={{ padding: '0.3rem' }}>Ref Range</th>
-                      <th style={{ padding: '0.3rem' }}>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '0.3rem' }}>Hemoglobin</td>
-                      <td style={{ padding: '0.3rem', fontWeight: 700 }}>14.2 g/dL</td>
-                      <td style={{ padding: '0.3rem', color: 'var(--text-muted)' }}>12.0 - 15.5</td>
-                      <td style={{ padding: '0.3rem', color: '#16a34a', fontWeight: 700 }}>NORMAL</td>
-                    </tr>
-                    <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '0.3rem' }}>White Blood Cells</td>
-                      <td style={{ padding: '0.3rem', fontWeight: 700 }}>6.8 K/uL</td>
-                      <td style={{ padding: '0.3rem', color: 'var(--text-muted)' }}>4.5 - 11.0</td>
-                      <td style={{ padding: '0.3rem', color: '#16a34a', fontWeight: 700 }}>NORMAL</td>
-                    </tr>
-                    <tr>
-                      <td style={{ padding: '0.3rem' }}>Platelet Count</td>
-                      <td style={{ padding: '0.3rem', fontWeight: 700 }}>240 K/uL</td>
-                      <td style={{ padding: '0.3rem', color: 'var(--text-muted)' }}>150 - 450</td>
-                      <td style={{ padding: '0.3rem', color: '#16a34a', fontWeight: 700 }}>NORMAL</td>
-                    </tr>
-                  </tbody>
-                </table>
+                {/* Patient & Consultation Details Box */}
+                <div style={{ padding: '0.85rem 1rem', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', fontSize: '0.725rem' }}>
+                  <div>
+                    <div style={{ fontWeight: 700, color: '#334155', marginBottom: '0.25rem' }}>PATIENT INFORMATION</div>
+                    <div><span style={{ color: '#64748b' }}>Patient Name:</span> <strong>John Doe</strong></div>
+                    <div><span style={{ color: '#64748b' }}>Patient ID:</span> P-1</div>
+                    <div><span style={{ color: '#64748b' }}>Age / Gender:</span> 28 yrs / M</div>
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, color: '#334155', marginBottom: '0.25rem' }}>CONSULTATION DETAILS</div>
+                    <div><span style={{ color: '#64748b' }}>Report ID:</span> <strong>#REP-41</strong></div>
+                    <div><span style={{ color: '#64748b' }}>Date & Time:</span> 17/5/2026 at 16:45:00</div>
+                    <div><span style={{ color: '#64748b' }}>Doctor:</span> Dr. Joseph Torres (General Medicine)</div>
+                  </div>
+                </div>
+
+                {/* Clinical Vitals */}
+                <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #e2e8f0' }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.725rem', color: '#184c78', marginBottom: '0.35rem' }}>
+                    1. CLINICAL VITALS
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.4rem', background: '#1e3a5f', padding: '0.45rem', borderRadius: '4px', color: '#fff', fontSize: '0.68rem', textAlign: 'center' }}>
+                    <div>
+                      <div style={{ color: '#93c5fd', fontSize: '0.62rem' }}>Temperature</div>
+                      <div style={{ fontWeight: 700 }}>98.5 °F</div>
+                    </div>
+                    <div>
+                      <div style={{ color: '#93c5fd', fontSize: '0.62rem' }}>Blood Pressure</div>
+                      <div style={{ fontWeight: 700 }}>132/84 mmHg</div>
+                    </div>
+                    <div>
+                      <div style={{ color: '#93c5fd', fontSize: '0.62rem' }}>Weight</div>
+                      <div style={{ fontWeight: 700 }}>94.6 kg</div>
+                    </div>
+                    <div>
+                      <div style={{ color: '#93c5fd', fontSize: '0.62rem' }}>Blood Glucose</div>
+                      <div style={{ fontWeight: 700 }}>106 mg/dL</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Diagnosis & Clinical Notes */}
+                <div style={{ padding: '0.75rem 1rem', fontSize: '0.725rem' }}>
+                  <div style={{ fontWeight: 700, color: '#184c78', marginBottom: '0.25rem' }}>
+                    2. DIAGNOSIS & CLINICAL NOTES
+                  </div>
+                  <div>
+                    <span style={{ color: '#64748b' }}>Primary Diagnosis:</span>{' '}
+                    <strong style={{ color: '#dc2626' }}>Lumbar Spondylosis</strong>
+                  </div>
+                  <div style={{ marginTop: '0.2rem', color: '#475569' }}>
+                    <span style={{ color: '#64748b' }}>Physician Notes:</span> Clinical examination complete. Diagnosed with Lumbar Spondylosis. Patient advised to follow prescribed regimen strictly.
+                  </div>
+                </div>
               </div>
 
               <div style={{ textAlign: 'center', marginTop: '0.35rem' }}>
                 <button
                   onClick={() => handleDownloadFile('protected')}
                   className="btn-primary"
-                  style={{ width: '100%', justifyContent: 'center', fontSize: '0.75rem' }}
+                  style={{ width: '100%', justifyContent: 'center', fontSize: '0.75rem', padding: '0.55rem' }}
                 >
-                  <Download style={{ width: '13px', height: '13px' }} /> Download Authentic PDF (Open in PDF Viewer)
+                  <Download style={{ width: '13px', height: '13px' }} /> Download Authentic E-Health Report PDF (#REP-41)
                 </button>
               </div>
             </div>
@@ -650,6 +673,20 @@ export default function AttackLabView({
             <tbody>
               <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                 <td style={{ padding: '0.75rem 1rem', fontWeight: 600, color: 'var(--brand-navy)' }}>
+                  Ransomware Extortion Defense
+                </td>
+                <td style={{ padding: '0.75rem 1rem', color: '#dc2626', fontWeight: 700 }}>
+                  PDF Defaced: Demanding 5.0 BTC ($350k)
+                </td>
+                <td style={{ padding: '0.75rem 1rem', color: '#059669', fontWeight: 700 }}>
+                  Extortion Defeated · $0 Paid · Clean Recovery
+                </td>
+                <td style={{ padding: '0.75rem 1rem' }}>
+                  <span className="badge badge-emerald">Zero Ransom Exposure</span>
+                </td>
+              </tr>
+              <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                <td style={{ padding: '0.75rem 1rem', fontWeight: 600, color: 'var(--brand-navy)' }}>
                   Mean Time to Contain (MTTC)
                 </td>
                 <td style={{ padding: '0.75rem 1rem', color: '#dc2626', fontWeight: 700 }}>
@@ -664,16 +701,16 @@ export default function AttackLabView({
               </tr>
               <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                 <td style={{ padding: '0.75rem 1rem', fontWeight: 600, color: 'var(--brand-navy)' }}>
-                  Ransomware Blast Radius
+                  Patient Report #REP-41 Status
                 </td>
                 <td style={{ padding: '0.75rem 1rem', color: '#dc2626', fontWeight: 700 }}>
-                  100% of S3 diagnostic files lost
+                  Permanently Defaced with Ransom Note
                 </td>
                 <td style={{ padding: '0.75rem 1rem', color: '#059669', fontWeight: 700 }}>
-                  0 legitimate files lost
+                  Authentic E-Health Clinical PDF (100% Intact)
                 </td>
                 <td style={{ padding: '0.75rem 1rem' }}>
-                  <span className="badge badge-emerald">Zero Blast Radius</span>
+                  <span className="badge badge-emerald">Authentic Recovery</span>
                 </td>
               </tr>
               <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
@@ -688,20 +725,6 @@ export default function AttackLabView({
                 </td>
                 <td style={{ padding: '0.75rem 1rem' }}>
                   <span className="badge badge-emerald">Continuity Guaranteed</span>
-                </td>
-              </tr>
-              <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                <td style={{ padding: '0.75rem 1rem', fontWeight: 600, color: 'var(--brand-navy)' }}>
-                  Patient Diagnostic Document
-                </td>
-                <td style={{ padding: '0.75rem 1rem', color: '#dc2626', fontWeight: 700 }}>
-                  Corrupted Ciphertext (Unreadable PDF)
-                </td>
-                <td style={{ padding: '0.75rem 1rem', color: '#059669', fontWeight: 700 }}>
-                  Authentic Clinical PDF (Verified SHA-256)
-                </td>
-                <td style={{ padding: '0.75rem 1rem' }}>
-                  <span className="badge badge-emerald">Cryptographic Recovery</span>
                 </td>
               </tr>
             </tbody>
