@@ -48,6 +48,8 @@ def current_user(token: HTTPAuthorizationCredentials = Depends(bearer), db: Sess
         {"digest": session_hash, "now": now()}).mappings().first()
     if not user:
         raise HTTPException(401, "Sign in to continue")
+    if user["role"] not in ("viewer","analyst","admin"):
+        raise HTTPException(403,"Customer membership is inactive")
     return dict(user)
 
 

@@ -8,8 +8,9 @@
   "external_id": "replace-with-a-unique-customer-value",
   "monitor_role": "arn:aws:iam::111122223333:role/example-observer",
   "recovery_role": "arn:aws:iam::111122223333:role/example-recovery",
-  "canary": "reports/decoy.txt",
+  "canary": "",
   "read_only_actors": [],
   "trusted": {},
-  "slack_env": ""
+  "slack_env": "",
+  "setup_role": "arn:aws:iam::111122223333:role/example-setup"
 }

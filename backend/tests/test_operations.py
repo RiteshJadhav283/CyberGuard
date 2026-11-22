@@ -219,13 +219,23 @@ class TestCloud(unittest.TestCase):
                 assert Key.startswith("reports/.aegis-probes/")
                 if self.purpose=="test_role" and iam.policy:
                     raise Error("AccessDenied")
+                return {}
         client=Cloud(cfg)
         client.client=lambda role,svc:iam if svc=="iam" else Probe(role)
-        client.restrict("1234")
+        from aegis.response import AWSActions, make_policy
+        from aegis.security import now
+        from unittest.mock import MagicMock
+        cfg["control_role"]="arn:aws:iam::111122223333:role/aegis-sandbox/control"
+        adapter=AWSActions(client,MagicMock(),"connection")
+        policy=make_policy(cfg,"1234",now()+60)
+        self.assertIsNone(adapter.current())
+        adapter.install(policy)
+        self.assertEqual(adapter.current(),policy)
         self.assertEqual(iam.policy["Statement"][0]["Resource"],"arn:aws:s3:::source/reports/*")
-        with self.assertRaises(ReviewRequired):
-            client.restrict("5678",reverse=True)
-        client.restrict("1234",reverse=True)
+        self.assertFalse(adapter.probe("test_role","1234"))
+        self.assertTrue(adapter.probe("control_role","1234"))
+        adapter.remove()
+        self.assertTrue(adapter.probe("test_role","1234"))
         self.assertIsNone(iam.policy)
 
     def test_jira_create_and_known_issue_update(self):
@@ -261,9 +271,11 @@ class TestCloud(unittest.TestCase):
         event={"source":"aws.s3","detail-type":"AWS API Call via CloudTrail","region":cfg["region"],"account":cfg["account"],
             "detail":{"eventSource":"s3.amazonaws.com","eventName":"PutObject","eventID":"abc",
             "eventTime":"2026-01-01T11:00:00Z","requestParameters":{"bucketName":"source","key":"reports/test.txt"},
-            "userIdentity":{"sessionContext":{"sessionIssuer":{"arn":"test-writer"}}}}}
+            "userIdentity":{"type":"AssumedRole","sessionContext":{"sessionIssuer":{"arn":"test-writer"}}}}}
         self.assertEqual(normalize(event,cfg)["actor"],"test-writer")
         event["detail"]["requestParameters"]["key"]="reports/.aegis-probes/test"
-        self.assertIsNone(normalize(event,cfg))
+        # An arbitrary writer in the probe directory is activity. Only matched
+        # AWS request receipts are suppressed by the transactional consumer.
+        self.assertEqual(normalize(event,cfg)["key"],"reports/.aegis-probes/test")
         event["account"]="other"
         self.assertIsNone(normalize(event,cfg))

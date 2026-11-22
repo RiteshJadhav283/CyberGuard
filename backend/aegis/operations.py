@@ -7,7 +7,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from .cloud import Cloud, ReviewRequired, replay_bytes
+from .canary import provision, inventory, check_reads, read_health
+from .response import eligible, proposal, reserve
+from .rules import Rules
 from .db import database
+from .evidence import events_for, explanation
 from .guardian import notify, queue, record, replay, rows, run
 from .security import current_user, digest, now, roles, uid
 
@@ -40,16 +44,19 @@ def case_context(db,user,identifier,lock=False):
     if lock:
         run(db,"UPDATE connections SET health=health WHERE id=:id",id=conn["id"])
         case = run(db,"SELECT * FROM cases WHERE id=:id",id=identifier).mappings().one()
+        conn = connection(db,user,case["connection"])
     return case,conn
 
 
-def public_conn(conn):
+def public_conn(db,conn):
     cfg=json.loads(conn["config"])
     health=conn["health"]
     if conn["enabled"] and conn["mode"]=="aws" and conn["checked_at"] and now()-conn["checked_at"]>120:
         health="Worker check overdue"
     return {k:conn[k] for k in ("id","label","mode","enabled","health","checked_at")} | {
         "health":health,"bucket":cfg["bucket"],"prefix":cfg["prefix"],"recovery_bucket":cfg["recovery_bucket"],
+        "account":cfg.get("account"),"region":cfg.get("region"),"canaries":inventory(db,conn["id"]),
+        "rules":Rules.model_validate(cfg.get("rules",{})).model_dump(),"enrolled_role":cfg.get("test_role"),"read_monitoring":read_health(db,conn,cfg),
         "canary":cfg.get("canary",""),"slack_configured":bool(cfg.get("slack_env")),"jira_configured":bool(cfg.get("jira"))}
 
 
@@ -60,43 +67,120 @@ def overview(user=Depends(current_user), db:Session=Depends(database)):
         WHERE n.customer=:customer ORDER BY c.last_at DESC LIMIT 100""",customer=user["customer"]))
     activity=rows(run(db,"""SELECT a.*,n.mode,n.label FROM activity a JOIN connections n ON n.id=a.connection
         WHERE n.customer=:c ORDER BY received DESC,at DESC LIMIT 40""",c=user["customer"]))
-    return {"connections":[public_conn(c) for c in connections],"cases":cases,"activity":activity}
+    for event in activity:
+        event["source"]=json.loads(event["source"])
+    return {"connections":[public_conn(db,c) for c in connections],"cases":cases,"activity":activity}
 
 
 @router.post("/connections/replay")
 def create_replay(user=Depends(roles("admin")),db:Session=Depends(database)):
     identifier="replay-"+digest(user["customer"].encode())[:32]
     cfg={"bucket":"synthetic-files","prefix":"reports/","recovery_bucket":"synthetic-recovery",
-         "canary":"reports/decoy.txt","read_only_actors":["replay/report-reader"],"test_role":"replay/report-reader"}
+         "canary":f"reports/.aegis-canaries/{identifier}/check-1.txt","account":"000000000000","region":"us-east-1",
+         "test_role":"arn:aws:iam::000000000000:role/aegis-sandbox/DemoWriter",
+         "control_role":"arn:aws:iam::000000000000:role/aegis-sandbox/DemoControl",
+         "read_only_actors":["arn:aws:iam::000000000000:role/aegis-sandbox/DemoWriter"]}
     run(db,"""INSERT INTO connections VALUES (:id,:customer,'Practice bucket','replay',:cfg,true,'Ready',:at)
         ON CONFLICT (id) DO NOTHING""",id=identifier,customer=user["customer"],cfg=json.dumps(cfg),at=now())
     db.commit()
-    return public_conn(connection(db,user,identifier))
+    return public_conn(db,connection(db,user,identifier))
+
+
+@router.get("/connections/{identifier}")
+def get_connection(identifier:str,user=Depends(current_user),db:Session=Depends(database)):
+    return public_conn(db,connection(db,user,identifier))
+
+
+@router.put("/connections/{identifier}/rules")
+def configure(identifier:str,ruleset:Rules,user=Depends(roles("admin")),db:Session=Depends(database)):
+    connection(db,user,identifier)
+    run(db,"UPDATE connections SET health=health WHERE id=:id",id=identifier)
+    conn=connection(db,user,identifier)
+    cfg=json.loads(conn["config"])
+    if ruleset.automatic_triggers and (not cfg.get("test_role") or (conn["mode"]=="aws" and not cfg.get("action_role"))):
+        raise HTTPException(409,"Enroll the dedicated writer and control role before enabling automatic response")
+    cfg["rules"]=ruleset.model_dump()
+    cfg["rule_approval"]={"administrator_id":user["id"],"at":now()}
+    run(db,"UPDATE connections SET config=:cfg WHERE id=:id",id=identifier,cfg=json.dumps(cfg))
+    db.commit()
+    return cfg["rules"]
+
+
+@router.post("/connections/{identifier}/canaries")
+def plant(identifier:str,user=Depends(roles("admin")),db:Session=Depends(database)):
+    conn=connection(db,user,identifier)
+    try:
+        return {"mode":conn["mode"],"canaries":provision(db,conn)}
+    except ReviewRequired as exc:
+        raise HTTPException(409,str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(503,"Setup interrupted. Retry to resume from the stored inventory.") from exc
+
+
+@router.post("/connections/{identifier}/read-check",status_code=202)
+def verify_reads(identifier:str,user=Depends(roles("admin")),db:Session=Depends(database)):
+    conn=connection(db,user,identifier)
+    try:
+        check_reads(db,conn)
+    except ReviewRequired as exc:
+        raise HTTPException(409,str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(503,"The read check was interrupted. Inspect the recorded requests.") from exc
+    return read_health(db,conn,json.loads(conn["config"]))
+
+
+class Deployment(BaseModel):
+    connection_id: str
+    account: str
+    region: str
+    bucket: str
+    prefix: str
+
+
+@router.post("/connections/aws")
+def activate_selected(selection:Deployment,user=Depends(roles("admin")),db:Session=Depends(database)):
+    conn=connection(db,user,selection.connection_id)
+    cfg=json.loads(conn["config"])
+    if conn["mode"]!="aws" or any(getattr(selection,k)!=cfg[k] for k in ("account","region","bucket","prefix")):
+        raise HTTPException(409,"Choose an authorized deployment and its registered scope")
+    return enable(conn["id"],True,user,db)
 
 
 @router.post("/connections/{identifier}/enabled/{enabled}")
 def enable(identifier:str,enabled:bool,user=Depends(roles("admin")),db:Session=Depends(database)):
-    connection(db,user,identifier)
+    conn=connection(db,user,identifier)
+    if enabled and conn["mode"]=="aws":
+        try:
+            Cloud(json.loads(conn["config"])).check()
+        except ReviewRequired as exc:
+            raise HTTPException(409,str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(503,"Cannot verify the registered bucket and queue") from exc
     run(db,"UPDATE connections SET enabled=:flag,health=:health WHERE id=:id",flag=enabled,
         health="Awaiting next check" if enabled else "Paused",id=identifier)
     db.commit()
-    return public_conn(connection(db,user,identifier))
+    return public_conn(db,connection(db,user,identifier))
 
 
 @router.post("/connections/{identifier}/replay/{scenario}")
-def run_replay(identifier:str,scenario:Literal["routine","bulk","canary","correlated"],
+def run_replay(identifier:str,scenario:Literal["routine","bulk","canary","correlated","canary-overwrite","canary-read","canary-denied","canary-delete","enrolled-bulk"],
                user=Depends(roles("admin","analyst")),db:Session=Depends(database)):
     conn=connection(db,user,identifier)
     if conn["mode"]!="replay" or not conn["enabled"]:
         raise HTTPException(409,"An enabled replay connection is required")
-    count=replay(db,conn,scenario)
+    try:
+        result=replay(db,conn,scenario)
+    except ReviewRequired as exc:
+        raise HTTPException(409,str(exc)) from exc
     db.commit()
-    return {"recorded":count}
+    return result
 
 
 def case_report(db,user,identifier):
     case,conn=case_context(db,user,identifier)
-    events=rows(run(db,"SELECT * FROM activity WHERE group_id=:id ORDER BY at,event_id",id=identifier))
+    events=events_for(db,case)
+    for event in events:
+        event["mode"]=conn["mode"]
     jobs=rows(run(db,"""SELECT id,kind,state,payload,result,expires,attempts FROM jobs
         WHERE case_id=:id ORDER BY expires,id""",id=identifier))
     for job in jobs:
@@ -105,7 +189,10 @@ def case_report(db,user,identifier):
     history=run(db,"""SELECT count(*) AS previous_events,count(DISTINCT object_key) AS previous_files
         FROM activity WHERE connection=:conn AND actor=:actor AND at<:start""",conn=conn["id"],
         actor=case["actor"],start=case["first_at"]).mappings().one()
-    return {**case,"history":dict(history),"evidence":json.loads(case["evidence"]),"connection":public_conn(conn),"events":events,
+    lease=run(db,"SELECT actor,state,until_at,policy FROM restrictions WHERE case_id=:id",id=identifier).mappings().first()
+    restriction=({**lease,"policy":json.loads(lease["policy"])} if lease else None)
+    return {**case,"metrics":json.loads(case["metrics"]),"restriction":restriction,
+            "explanation":explanation(case,events,jobs,conn["mode"]),"history":dict(history),"evidence":json.loads(case["evidence"]),"connection":public_conn(db,conn),"events":events,
             "jobs":jobs,"timeline":rows(run(db,"SELECT * FROM case_log WHERE case_id=:id ORDER BY id",id=identifier))}
 
 
@@ -155,7 +242,7 @@ def preview(identifier:str,selection:Selection,user=Depends(roles("admin","analy
         raise HTTPException(409,"Record a containment decision before recovery")
     cfg=json.loads(conn["config"])
     job=uid()
-    affected=set(run(db,"SELECT DISTINCT object_key FROM activity WHERE group_id=:id",id=identifier).scalars())
+    affected={e["object_key"] for e in events_for(db,case)}
     items=[]
     skipped=[]
     cloud=Cloud(cfg)
@@ -163,7 +250,16 @@ def preview(identifier:str,selection:Selection,user=Depends(roles("admin","analy
         if key not in affected:
             raise HTTPException(422,"Choose files from this incident")
         baseline=cfg.get("trusted",{}).get(key)
-        if conn["mode"]=="replay":
+        canary=run(db,"""SELECT version,sha256 FROM canaries WHERE connection=:c AND object_key=:k
+            AND version IS NOT NULL AND sha256 IS NOT NULL""",c=conn["id"],k=key).mappings().first()
+        if canary:
+            baseline=canary
+        if conn["mode"]=="replay" and canary:
+            observed=run(db,"SELECT version FROM replay_versions WHERE connection=:c AND object_key=:k AND is_current=true",
+                         c=conn["id"],k=key).scalar()
+            if not observed:
+                baseline=None
+        elif conn["mode"]=="replay":
             baseline={"version":"replay-original","sha256":digest(replay_bytes(key))}
             observed="replay-revision"
         elif baseline:
@@ -198,8 +294,8 @@ def containment(identifier:str,direction:Literal["restrict","reverse"],user=Depe
                 db:Session=Depends(database)):
     case,conn=case_context(db,user,identifier,True)
     cfg=json.loads(conn["config"])
-    if (not conn["enabled"] or case["actor"]!=cfg.get("test_role") or
-        (conn["mode"]=="aws" and not cfg.get("action_role")) or len(json.loads(case["evidence"]))<2):
+    if ((direction=="restrict" and (not conn["enabled"] or not eligible(cfg,case["actor"]))) or case["actor"]!=cfg.get("test_role") or
+        (conn["mode"]=="aws" and not cfg.get("action_role")) or (direction=="restrict" and case["rule"] not in ("canary","rolling_bulk") and len(json.loads(case["evidence"]))<2)):
         raise HTTPException(409,"Actor or evidence is ineligible for scoped containment")
     if direction=="reverse" and case["stage"]!="containment_uncertain":
         previous=last_restriction(db,identifier)
@@ -208,7 +304,8 @@ def containment(identifier:str,direction:Literal["restrict","reverse"],user=Depe
     allowed=("open","review") if direction=="restrict" else ("contained","containment_uncertain","recovered","partial_recovery")
     if case["stage"] not in allowed:
         raise HTTPException(409,"Containment stage changed")
-    payload={"actor":case["actor"],"bucket":cfg["bucket"],"prefix":cfg["prefix"],"stage":case["stage"]}
+    lease=run(db,"SELECT * FROM restrictions WHERE case_id=:id",id=identifier).mappings().first()
+    payload=proposal(cfg,identifier,case["stage"],direction,lease)
     job=queue(db,conn,identifier,direction,payload,pending=True)
     record(db,identifier,user["id"],"containment_preview",job)
     db.commit()
@@ -222,7 +319,7 @@ def decide(identifier:str,job_id:str,decision:Literal["approve","reject"],user=D
     job=run(db,"SELECT * FROM jobs WHERE id=:job AND case_id=:id",job=job_id,id=identifier).mappings().first()
     if not job:
         raise HTTPException(404,"Preview unavailable")
-    if not conn["enabled"] or job["state"]!="preview" or job["expires"]<=now():
+    if (not conn["enabled"] and job["kind"]!="reverse") or job["state"]!="preview" or job["expires"]<=now():
         raise HTTPException(409,"Preview expired, already decided or connection paused")
     payload=json.loads(job["payload"])
     if decision=="approve":
@@ -232,6 +329,12 @@ def decide(identifier:str,job_id:str,decision:Literal["approve","reject"],user=D
         if job["kind"] in ("restrict","reverse"):
             if payload["stage"] != case["stage"]:
                 raise HTTPException(409,"Case changed since preview")
+            if job["kind"]=="restrict" and "policy" in payload:
+                try:
+                    reserve(db,conn,identifier,payload)
+                except ReviewRequired as exc:
+                    raise HTTPException(409,str(exc)) from exc
+            record(db,identifier,user["id"],"restriction_requested" if job["kind"]=="restrict" else "reversal_requested",job_id)
             run(db,"UPDATE cases SET stage='containment_pending' WHERE id=:id",id=identifier)
         elif case["stage"] not in ("contained","containment_skipped","recovered","reversed","partial_recovery"):
             raise HTTPException(409,"Recovery precondition changed")

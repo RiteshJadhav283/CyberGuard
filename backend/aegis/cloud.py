@@ -7,6 +7,7 @@ from urllib.parse import unquote
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .security import digest
+from .rules import Rules
 
 MAX_FILE = 5 * 1024 * 1024
 
@@ -35,12 +36,15 @@ class Settings(BaseModel):
     recovery_bucket: str = Field(pattern=r"^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$")
     queue_name: str = Field(pattern=r"^[a-zA-Z0-9_-]{1,80}$")
     external_id: str = Field(min_length=16, max_length=128)
+    read_logging_available: bool | None = None
+    setup_role: str = ""
     monitor_role: str
     recovery_role: str
     action_role: str = ""
     test_role: str = ""
     control_role: str = ""
     canary: str = ""
+    rules: Rules = Field(default_factory=Rules)
     read_only_actors: list[str] = []
     burst_threshold: int = Field(default=6, ge=2, le=1000)
     trusted: dict[str, Baseline] = {}
@@ -60,7 +64,7 @@ class Settings(BaseModel):
         optional = [self.action_role,self.test_role,self.control_role]
         if any(optional) and not all(optional):
             raise ValueError("Containment requires all three dedicated roles")
-        roles = [self.monitor_role,self.recovery_role,*filter(None,optional)]
+        roles = [self.monitor_role,self.recovery_role,*filter(None,[self.setup_role,*optional])]
         pattern = rf"arn:aws:iam::{self.account}:role/[A-Za-z0-9_+=,.@/-]+"
         if self.test_role and not all(":role/aegis-sandbox/" in name for name in (self.test_role,self.control_role)):
             raise ValueError("Containment requires dedicated sandbox roles")
@@ -78,17 +82,21 @@ def code(exc):
 
 
 class Cloud:
-    def __init__(self, cfg):
+    def __init__(self, cfg, session_name="AEGIS-Guardian"):
+        self.session_name = session_name
         self.cfg = cfg
         self.sessions = {}
+        self.credential_hashes = {}
+        self.on_verified_read = None
 
     def client(self, purpose, service):
         import boto3
         role = self.cfg[purpose]
         if role not in self.sessions:
             creds = boto3.client("sts",region_name=self.cfg["region"]).assume_role(
-                RoleArn=role,ExternalId=self.cfg["external_id"],RoleSessionName="AEGIS-Guardian"
+                RoleArn=role,ExternalId=self.cfg["external_id"],RoleSessionName=self.session_name,DurationSeconds=900
             )["Credentials"]
+            self.credential_hashes[purpose] = digest(creds["AccessKeyId"].encode())
             self.sessions[role] = boto3.Session(aws_access_key_id=creds["AccessKeyId"],
                 aws_secret_access_key=creds["SecretAccessKey"],aws_session_token=creds["SessionToken"],
                 region_name=self.cfg["region"])
@@ -112,7 +120,10 @@ class Cloud:
         result=client.get_object(Bucket=self.cfg["bucket"],Key=key,VersionId=version,
                                  ExpectedBucketOwner=self.cfg["account"],Range="bytes=0-65535")
         with closing(result["Body"]) as body:
-            return body.read(65536)
+            sample=body.read(65536)
+        if self.on_verified_read:
+            self.on_verified_read(result.get("ResponseMetadata",{}).get("RequestId"),key,"GetObject",self.cfg["monitor_role"])
+        return sample
 
     def current(self, key):
         s3 = self.client("recovery_role","s3")
@@ -133,6 +144,8 @@ class Cloud:
         result = s3.get_object(**args)
         with closing(result["Body"]) as body:
             content = body.read(MAX_FILE+1)
+        if self.on_verified_read and bucket==self.cfg["bucket"]:
+            self.on_verified_read(result.get("ResponseMetadata",{}).get("RequestId"),key,"GetObject",self.cfg["recovery_role"])
         if len(content)>MAX_FILE:
             raise ReviewRequired("File exceeds the five MiB recovery limit")
         return content,result.get("VersionId","")
@@ -164,50 +177,6 @@ class Cloud:
         if digest(content) != item["sha256"] or version in ("","null"):
             raise ReviewRequired("Destination verification failed")
         return version
-
-    def restrict(self, case_id, reverse=False):
-        cfg = self.cfg
-        iam = self.client("action_role","iam")
-        role = cfg["test_role"].split("/")[-1]
-        # The dedicated policy name and case-specific statement prevent another case from reversing it.
-        name = "AEGISApprovedTestRestriction"
-        policy = {"Version":"2012-10-17","Statement":[{"Sid":"Case"+case_id,"Effect":"Deny",
-                  "Action":["s3:PutObject","s3:DeleteObject","s3:DeleteObjectVersion"],
-                  "Resource":f"arn:aws:s3:::{cfg['bucket']}/{cfg['prefix']}*"}]}
-        try:
-            existing = iam.get_role_policy(RoleName=role,PolicyName=name)["PolicyDocument"]
-            if isinstance(existing,str):
-                existing=json.loads(unquote(existing))
-        except Exception as exc:
-            if code(exc)!="NoSuchEntity":
-                raise
-            existing=None
-        if existing is not None and existing != policy:
-            raise ReviewRequired("Dedicated policy changed or belongs to another case")
-        if reverse:
-            if existing:
-                iam.delete_role_policy(RoleName=role,PolicyName=name)
-        elif existing is None:
-            self.probe("test_role",case_id)
-            self.probe("control_role",case_id)
-            iam.put_role_policy(RoleName=role,PolicyName=name,PolicyDocument=json.dumps(policy))
-        self.probe("control_role",case_id)
-        if reverse:
-            self.probe("test_role",case_id)
-        else:
-            try:
-                self.probe("test_role",case_id)
-            except Exception as exc:
-                if code(exc) in ("AccessDenied","403"):
-                    return
-                raise
-            raise RuntimeError("Restriction is awaiting propagation")
-
-    def probe(self, purpose, case_id):
-        client = self.client(purpose,"s3")
-        client.put_object(Bucket=self.cfg["bucket"],ExpectedBucketOwner=self.cfg["account"],
-            Key=self.cfg["prefix"]+".aegis-probes/"+case_id+"/"+purpose,Body=b"AEGIS access check")
-
 
 def replay_bytes(key):
     return ("AEGIS synthetic reference\n"+key+"\n").encode()

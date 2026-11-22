@@ -1,6 +1,6 @@
 # CYB-03 — API Specification
 
-> Earlier design proposal. For implementation order, permission scope and recovery behavior, use [the approved plan](12-IMPLEMENTATION-PLAN.md). The [README](../README.md) lists the capabilities available in the current checkout.
+> Earlier design proposal. The [current dashboard API contract](guardian-api.md) documents the implemented endpoints and response fields. For implementation order, permission scope and recovery behavior, use [the approved plan](12-IMPLEMENTATION-PLAN.md). The [README](../README.md) lists the capabilities available in the current checkout.
 
 ## Base URL
 ```

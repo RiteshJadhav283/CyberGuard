@@ -1,0 +1,383 @@
+{
+  "id": "8fc37f99783f13ece47560d5963636c5a690e9e2",
+  "connection": {
+    "id": "replay-dc51a7f4c27ece9d1f3e33aa46deffa6",
+    "label": "Practice bucket",
+    "mode": "replay",
+    "enabled": 1,
+    "health": "Ready",
+    "checked_at": 1795300882,
+    "bucket": "synthetic-files",
+    "prefix": "reports/",
+    "recovery_bucket": "synthetic-recovery",
+    "account": "000000000000",
+    "region": "us-east-1",
+    "canaries": [
+      {
+        "bucket": "synthetic-files",
+        "object_key": "reports/.aegis-canaries/replay-dc51a7f4c27ece9d1f3e33aa46deffa6/check-1.txt",
+        "trusted_version_id": "bf03baab-b134-431a-bfd2-c5b8c147d523",
+        "sha256": "df13497f92ce9a36a60b08c806a453051f38ea4ffdb6435bc0f642d13d88b2d1",
+        "setup_request_id": "76a8fdd6-a783-4abb-8d0f-fb98289832da",
+        "status": "ready"
+      },
+      {
+        "bucket": "synthetic-files",
+        "object_key": "reports/.aegis-canaries/replay-dc51a7f4c27ece9d1f3e33aa46deffa6/check-2.txt",
+        "trusted_version_id": "290054a9-5dc6-4f70-b885-6621a6c219a2",
+        "sha256": "7734016505eba9456db56180376d5925ddba97351b9d8ca97caee5142e108ed9",
+        "setup_request_id": "28a53a33-d383-4cd6-a196-9af8f10d0b5b",
+        "status": "ready"
+      },
+      {
+        "bucket": "synthetic-files",
+        "object_key": "reports/.aegis-canaries/replay-dc51a7f4c27ece9d1f3e33aa46deffa6/check-3.txt",
+        "trusted_version_id": "4fe413a4-6061-4695-9781-cc9cb37aac7a",
+        "sha256": "c0c9525dd8a0f71e39bc8e3d83f911085483054361b77bab68f5078e34005e73",
+        "setup_request_id": "e5ab1eb6-2090-4723-94b2-c7d0f321a8bb",
+        "status": "ready"
+      }
+    ],
+    "rules": {
+      "bulk_enabled": false,
+      "threshold": 10,
+      "window_seconds": 300,
+      "automatic_triggers": [],
+      "ttl_seconds": 900,
+      "exempt_roles": [],
+      "scheduled_jobs": []
+    },
+    "enrolled_role": "arn:aws:iam::000000000000:role/aegis-sandbox/DemoWriter",
+    "read_monitoring": {
+      "status": "unconfirmed",
+      "mode": "replay",
+      "observations": [],
+      "checks": []
+    },
+    "canary": "reports/.aegis-canaries/replay-dc51a7f4c27ece9d1f3e33aa46deffa6/check-1.txt",
+    "slack_configured": false,
+    "jira_configured": false
+  },
+  "actor": "arn:aws:iam::000000000000:role/aegis-sandbox/DemoWriter",
+  "score": 100,
+  "evidence": [
+    "Registered canary access observed",
+    "The writer has a declared read-only business role"
+  ],
+  "stage": "reversed",
+  "first_at": 1795300800,
+  "last_at": 1795300800,
+  "rule": "canary",
+  "metrics": {
+    "canary_event_ids": [
+      "1f3ff002-e247-4075-8f40-69792b2fda01"
+    ]
+  },
+  "restriction": {
+    "actor": "arn:aws:iam::000000000000:role/aegis-sandbox/DemoWriter",
+    "state": "reversed",
+    "until_at": 1795301782,
+    "policy": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "Case8fc37f99783f13ece47560d5963636c5a690e9e2",
+          "Effect": "Deny",
+          "Action": [
+            "s3:PutObject",
+            "s3:DeleteObject",
+            "s3:DeleteObjectVersion"
+          ],
+          "Resource": "arn:aws:s3:::synthetic-files/reports/*",
+          "Condition": {
+            "DateLessThan": {
+              "aws:CurrentTime": "2026-11-21T22:56:22Z"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "explanation": {
+    "method": "deterministic",
+    "mode": "replay",
+    "claims": [
+      {
+        "text": "The replay event recorded PutObject on \"reports/.aegis-canaries/replay-dc51a7f4c27ece9d1f3e33aa46deffa6/check-1.txt\". The request succeeded.",
+        "event_ids": [
+          "1f3ff002-e247-4075-8f40-69792b2fda01"
+        ]
+      },
+      {
+        "text": "The recorded principal was \"arn:aws:iam::000000000000:role/aegis-sandbox/DemoWriter\". The session was \"arn:aws:sts::000000000000:assumed-role/DemoWriter/Mentoring\". The event identifies no individual person.",
+        "event_ids": [
+          "1f3ff002-e247-4075-8f40-69792b2fda01"
+        ]
+      },
+      {
+        "text": "Registered canary access observed",
+        "event_ids": [
+          "1f3ff002-e247-4075-8f40-69792b2fda01"
+        ]
+      },
+      {
+        "text": "The writer has a declared read-only business role",
+        "event_ids": [
+          "1f3ff002-e247-4075-8f40-69792b2fda01"
+        ]
+      },
+      {
+        "text": "replay probes: enrolled PutObject denied, control PutObject allowed",
+        "event_ids": [
+          "1f3ff002-e247-4075-8f40-69792b2fda01"
+        ],
+        "job_ids": [
+          "bce72648-6869-46a3-a146-9669d1b92ed2"
+        ]
+      },
+      {
+        "text": "replay probes: enrolled PutObject allowed, control PutObject allowed",
+        "event_ids": [
+          "1f3ff002-e247-4075-8f40-69792b2fda01"
+        ],
+        "job_ids": [
+          "c8c7b587-557a-4678-bac0-ccabf5f86341"
+        ]
+      }
+    ]
+  },
+  "history": {
+    "previous_events": 0,
+    "previous_files": 0
+  },
+  "events": [
+    {
+      "connection": "replay-dc51a7f4c27ece9d1f3e33aa46deffa6",
+      "event_id": "1f3ff002-e247-4075-8f40-69792b2fda01",
+      "actor": "arn:aws:iam::000000000000:role/aegis-sandbox/DemoWriter",
+      "object_key": "reports/.aegis-canaries/replay-dc51a7f4c27ece9d1f3e33aa46deffa6/check-1.txt",
+      "operation": "PutObject",
+      "at": 1795300800,
+      "received": 1795300882,
+      "group_id": "8fc37f99783f13ece47560d5963636c5a690e9e2",
+      "copy_source": "",
+      "entropy_jump": 0,
+      "source": {
+        "account": "000000000000",
+        "region": "us-east-1",
+        "bucket": "synthetic-files",
+        "role_arn": "arn:aws:iam::000000000000:role/aegis-sandbox/DemoWriter",
+        "session_arn": "arn:aws:sts::000000000000:assumed-role/DemoWriter/Mentoring",
+        "identity_type": "AssumedRole",
+        "principal_arn": "arn:aws:sts::000000000000:assumed-role/DemoWriter/Mentoring",
+        "source_ip": "192.0.2.10",
+        "request_id": "21267692-17cc-4e9b-82ea-514e654ae174",
+        "version_id": "69245727-ebd6-4d7a-baf7-af7a9cc73658"
+      },
+      "outcome": "success",
+      "mode": "replay"
+    }
+  ],
+  "jobs": [
+    {
+      "id": "bce72648-6869-46a3-a146-9669d1b92ed2",
+      "kind": "restrict",
+      "state": "done",
+      "payload": {
+        "actor": "arn:aws:iam::000000000000:role/aegis-sandbox/DemoWriter",
+        "bucket": "synthetic-files",
+        "prefix": "reports/",
+        "stage": "open",
+        "operation": "restrict",
+        "policy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Case8fc37f99783f13ece47560d5963636c5a690e9e2",
+              "Effect": "Deny",
+              "Action": [
+                "s3:PutObject",
+                "s3:DeleteObject",
+                "s3:DeleteObjectVersion"
+              ],
+              "Resource": "arn:aws:s3:::synthetic-files/reports/*",
+              "Condition": {
+                "DateLessThan": {
+                  "aws:CurrentTime": "2026-11-21T22:56:22Z"
+                }
+              }
+            }
+          ]
+        },
+        "restriction_expires_at": 1795301782
+      },
+      "result": {
+        "probes": {
+          "test_role": "denied",
+          "control_role": "allowed"
+        },
+        "mode": "replay",
+        "verification": "replay probes: enrolled PutObject denied, control PutObject allowed"
+      },
+      "expires": 1795301782,
+      "attempts": 0
+    },
+    {
+      "id": "c8c7b587-557a-4678-bac0-ccabf5f86341",
+      "kind": "reverse",
+      "state": "done",
+      "payload": {
+        "actor": "arn:aws:iam::000000000000:role/aegis-sandbox/DemoWriter",
+        "bucket": "synthetic-files",
+        "prefix": "reports/",
+        "stage": "contained",
+        "operation": "reverse",
+        "policy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Case8fc37f99783f13ece47560d5963636c5a690e9e2",
+              "Effect": "Deny",
+              "Action": [
+                "s3:PutObject",
+                "s3:DeleteObject",
+                "s3:DeleteObjectVersion"
+              ],
+              "Resource": "arn:aws:s3:::synthetic-files/reports/*",
+              "Condition": {
+                "DateLessThan": {
+                  "aws:CurrentTime": "2026-11-21T22:56:22Z"
+                }
+              }
+            }
+          ]
+        },
+        "restriction_expires_at": 1795301782
+      },
+      "result": {
+        "probes": {
+          "test_role": "allowed",
+          "control_role": "allowed"
+        },
+        "mode": "replay",
+        "verification": "replay probes: enrolled PutObject allowed, control PutObject allowed"
+      },
+      "expires": 1795301782,
+      "attempts": 0
+    }
+  ],
+  "timeline": [
+    {
+      "id": 1,
+      "case_id": "8fc37f99783f13ece47560d5963636c5a690e9e2",
+      "at": 1795300882,
+      "actor": "guardian",
+      "action": "incident_opened",
+      "detail": "Registered canary access observed / The writer has a declared read-only business role"
+    },
+    {
+      "id": 2,
+      "case_id": "8fc37f99783f13ece47560d5963636c5a690e9e2",
+      "at": 1795300882,
+      "actor": "guardian",
+      "action": "canary_touch",
+      "detail": "1f3ff002-e247-4075-8f40-69792b2fda01"
+    },
+    {
+      "id": 3,
+      "case_id": "8fc37f99783f13ece47560d5963636c5a690e9e2",
+      "at": 1795300882,
+      "actor": "687ae8e3-903d-4038-9cce-13093f6e9e5f",
+      "action": "containment_preview",
+      "detail": "bce72648-6869-46a3-a146-9669d1b92ed2"
+    },
+    {
+      "id": 4,
+      "case_id": "8fc37f99783f13ece47560d5963636c5a690e9e2",
+      "at": 1795300882,
+      "actor": "687ae8e3-903d-4038-9cce-13093f6e9e5f",
+      "action": "restriction_requested",
+      "detail": "bce72648-6869-46a3-a146-9669d1b92ed2"
+    },
+    {
+      "id": 5,
+      "case_id": "8fc37f99783f13ece47560d5963636c5a690e9e2",
+      "at": 1795300882,
+      "actor": "687ae8e3-903d-4038-9cce-13093f6e9e5f",
+      "action": "approve",
+      "detail": "bce72648-6869-46a3-a146-9669d1b92ed2"
+    },
+    {
+      "id": 6,
+      "case_id": "8fc37f99783f13ece47560d5963636c5a690e9e2",
+      "at": 1795300882,
+      "actor": "worker",
+      "action": "restriction_applied",
+      "detail": "bce72648-6869-46a3-a146-9669d1b92ed2"
+    },
+    {
+      "id": 7,
+      "case_id": "8fc37f99783f13ece47560d5963636c5a690e9e2",
+      "at": 1795300882,
+      "actor": "worker",
+      "action": "restriction_verified",
+      "detail": "bce72648-6869-46a3-a146-9669d1b92ed2"
+    },
+    {
+      "id": 8,
+      "case_id": "8fc37f99783f13ece47560d5963636c5a690e9e2",
+      "at": 1795300882,
+      "actor": "worker",
+      "action": "restrict_completed",
+      "detail": "bce72648-6869-46a3-a146-9669d1b92ed2"
+    },
+    {
+      "id": 9,
+      "case_id": "8fc37f99783f13ece47560d5963636c5a690e9e2",
+      "at": 1795300882,
+      "actor": "687ae8e3-903d-4038-9cce-13093f6e9e5f",
+      "action": "containment_preview",
+      "detail": "c8c7b587-557a-4678-bac0-ccabf5f86341"
+    },
+    {
+      "id": 10,
+      "case_id": "8fc37f99783f13ece47560d5963636c5a690e9e2",
+      "at": 1795300882,
+      "actor": "687ae8e3-903d-4038-9cce-13093f6e9e5f",
+      "action": "reversal_requested",
+      "detail": "c8c7b587-557a-4678-bac0-ccabf5f86341"
+    },
+    {
+      "id": 11,
+      "case_id": "8fc37f99783f13ece47560d5963636c5a690e9e2",
+      "at": 1795300882,
+      "actor": "687ae8e3-903d-4038-9cce-13093f6e9e5f",
+      "action": "approve",
+      "detail": "c8c7b587-557a-4678-bac0-ccabf5f86341"
+    },
+    {
+      "id": 12,
+      "case_id": "8fc37f99783f13ece47560d5963636c5a690e9e2",
+      "at": 1795300882,
+      "actor": "worker",
+      "action": "restriction_removal_requested",
+      "detail": "c8c7b587-557a-4678-bac0-ccabf5f86341"
+    },
+    {
+      "id": 13,
+      "case_id": "8fc37f99783f13ece47560d5963636c5a690e9e2",
+      "at": 1795300882,
+      "actor": "worker",
+      "action": "restriction_reversed",
+      "detail": "c8c7b587-557a-4678-bac0-ccabf5f86341"
+    },
+    {
+      "id": 14,
+      "case_id": "8fc37f99783f13ece47560d5963636c5a690e9e2",
+      "at": 1795300882,
+      "actor": "worker",
+      "action": "reverse_completed",
+      "detail": "c8c7b587-557a-4678-bac0-ccabf5f86341"
+    }
+  ]
+}

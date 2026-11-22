@@ -12,7 +12,7 @@ from .security import digest, now
 def revision(token_hash):
     with Session(engine) as db:
         customer=run(db,"""SELECT u.customer FROM users u JOIN sessions s ON s.user_id=u.id
-            WHERE s.digest=:hash AND s.expires>:at""",hash=token_hash,at=now()).scalar()
+            WHERE s.digest=:hash AND s.expires>:at AND u.role IN ('viewer','analyst','admin')""",hash=token_hash,at=now()).scalar()
         if customer is None:
             return None
         args={"c":customer}

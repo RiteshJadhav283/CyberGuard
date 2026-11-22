@@ -14,6 +14,14 @@ docker compose exec api python -m aegis.demo --customer demo
 
 Account provisioning prints each newly created account and its password once. Repeating the command keeps existing accounts. Open [the console](http://localhost:3000).
 
+### Mentoring demo
+
+Sign in as the demo administrator. In **Connections**, select **Add practice bucket**, **Provision three canaries**, then **canary-overwrite**. Open the new incident. The evidence names the recorded role and STS session and links the overwrite to its event ID. Preview the restriction, inspect its scope and approve. Wait for the worker to show the enrolled writer denied and the control writer allowed. Preview and approve reversal. Both probes should then show allowed. **Export evidence** saves the result.
+
+For a repeatable offline run from `backend/`, install `requirements-test.txt` and run `python -m aegis.mentoring`. The [sample run](docs/mentoring-replay.json) contains the synthetic evidence and both worker results. The [dashboard API contract](docs/guardian-api.md) describes provisioning, telemetry, opt-in automatic containment and rolling alerts.
+
+### Earlier practice scenarios
+
 1. Sign in as the demo administrator. In **Connections**, select **Add practice bucket**. Run **routine**, then **bulk**. Open **Activity** to see the changes. Neither scenario alone should open an incident.
 2. Run **correlated**. Open **Incidents** and inspect the score, affected keys, actor and earlier activity. Replay time advances in separate five-minute intervals so the scenarios can be rehearsed quickly.
 3. Select **Preview restriction**, review its scope, then **approve**. The local worker records a simulated containment result. Alternatively, enter a reason and choose **Skip containment**.
@@ -53,7 +61,7 @@ Follow the [Guardian onboarding and operations guide](guardian/README.md). The c
 | Capability | Implementation |
 |---|---|
 | Monitoring | CloudTrail S3 data events arrive through EventBridge and SQS. One event stream supplies both the operation and actor evidence. The consumer stores events before acknowledgement. |
-| Detection | Fixed five-minute windows group distinct changes by connection and actor. Canary, declared read-only identity, bulk changes, related copies and deletions, and optional synthetic sample randomness contribute to an explainable score. The incident threshold is 60. |
+| Detection | Canary reads, changes and denied attempts open a case on processing. The optional rolling rule counts distinct successful changes by role across five-minute boundaries. The original fixed five-minute windows group correlated operations by connection and actor. Canary, declared read-only identity, bulk changes, related copies and deletions, and optional synthetic sample randomness contribute to an explainable score. The incident threshold is 60. |
 | Response | A persisted case records review, approval, expiry, verification, reversal and closure. A restricted test role and unaffected control role provide scoped AWS verification. |
 | Recovery | Operator-provided trusted version IDs and SHA-256 values bind each approved source to a unique destination. A worker resumes one selected file at a time and reads each destination back. A file must fit within the five MiB prototype limit. |
 | Operator interface | Customer-scoped console, live change notifications with periodic refresh, evidence export, and optional Slack and Jira deliveries. |
