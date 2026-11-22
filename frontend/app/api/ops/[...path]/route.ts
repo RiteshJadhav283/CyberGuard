@@ -679,11 +679,105 @@ export async function handleRequest(req: NextRequest, context: { params: Promise
     return NextResponse.json(LIVE_CONNECTION)
   }
 
-  // GET /documents/download (Medical PDF inspection bench download)
+  // GET /documents/download (Medical PDF & artifact inspection bench download)
   if (root === 'documents' && path[1] === 'download') {
     const target = req.nextUrl.searchParams.get('target') || 'protected'
     const docName = req.nextUrl.searchParams.get('doc') || 'report-41-diagnostic.pdf'
 
+    // Canary check-2.txt or routine-consult.txt
+    if (docName.includes('check-2') || docName.includes('canary') || docName.endsWith('.txt')) {
+      if (docName.includes('routine')) {
+        const text = target === 'baseline'
+          ? `CLINICAL CONSULTATION NOTE: routine-consult-1002.txt\nDoctor: Dr. Joseph Torres (General Medicine)\nPatient: John Doe (P-1)\nStatus: Stored in baseline S3 without behavioral integrity validation.\n`
+          : `CLINICAL CONSULTATION NOTE: routine-consult-1002.txt\nDoctor: Dr. Joseph Torres (General Medicine) [Verified IAM Role: MediCore-Doctor-Role]\nPatient: John Doe (P-1)\nIntentGuard Verification: Score 0/100 (BENIGN_OPERATIONAL_WORKFLOW)\nStatus: Cryptographically validated and sealed in Aegis Vault.\n`
+        return new NextResponse(text, {
+          headers: {
+            'Content-Type': 'text/plain; charset=utf-8',
+            'Content-Disposition': `attachment; filename="${docName}"`
+          }
+        })
+      }
+
+      const text = target === 'baseline'
+        ? `[COMPROMISED CANARY TRIPWIRE]\nTarget: s3://medicore-baseline-reports/.aegis-canaries/tier-1/check-2.txt\nPayload: OVERWRITE_PAYLOAD_0x7FFA - TRAP NEUTRALIZED\nStatus: Silently overwritten by adversary. Zero CloudWatch alarms fired. Attacker retained write privileges.\n`
+        : `[AEGIS VERIFIED CANARY TRIPWIRE]\nTarget: s3://medicore-patient-reports/.aegis-canaries/tier-1/check-2.txt\nIntegrity: SHA-256 86c31cf8174c58a24c9a3b2c00dbe70549426b7597611a5cd5f10ebfdbd950fc\nStatus: Tamper attempt intercepted at T+1.84s. Attacker quarantined via Scoped IAM Deny. File restored from recovery vault.\n`
+      return new NextResponse(text, {
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Content-Disposition': `attachment; filename="${target === 'baseline' ? 'check-2-COMPROMISED.txt' : 'check-2-AEGIS-VERIFIED.txt'}"`
+        }
+      })
+    }
+
+    // Bulk encryption audit
+    if (docName.includes('bulk') || docName.includes('encryption') || docName.includes('scans')) {
+      const data = target === 'baseline'
+        ? {
+            status: 'UNPROTECTED_BULK_COMPROMISE',
+            total_objects: 110,
+            compromised_objects: 110,
+            blast_radius: '100% of medical repository encrypted',
+            algorithm: 'AES-256-GCM (DarkSurge Ransomware)',
+            extortion_demanded: '5.0 BTC (~$350,000 USD)',
+            recovery_eta: '4-7 business days from offline tapes'
+          }
+        : {
+            status: 'AEGIS_VELOCITY_BURST_CONTAINED',
+            total_objects: 110,
+            compromised_objects: 0,
+            burst_intercepted_at: '1.84 seconds',
+            mitigation: 'Session severed via AWS STS revoke & Scoped IAM Deny',
+            data_loss: '0 files',
+            sha256_verified: true
+          }
+      return NextResponse.json(data, {
+        headers: {
+          'Content-Disposition': `attachment; filename="${target === 'baseline' ? 'bulk-encryption-COMPROMISED.json' : 'bulk-encryption-AEGIS-SECURED.json'}"`
+        }
+      })
+    }
+
+    // Deletion audit ledger
+    if (docName.includes('ledger') || docName.includes('log') || docName.includes('delete') || docName.includes('wipe')) {
+      const text = target === 'baseline'
+        ? `HTTP/1.1 404 Not Found\n<?xml version="1.0" encoding="UTF-8"?>\n<Error><Code>NoSuchKey</Code><Message>The specified key does not exist.</Message><Key>logs/audit-ledger-2026.log</Key></Error>\nImpact: Forensic history destroyed by attacker. Irrecoverable data loss.\n`
+        : `[AEGIS IMMUTABLE AUDIT LEDGER - RESTORED FROM VAULT]\nTarget: audit-ledger-2026.log\nVault Source: s3://aegis-medicore-demo-guardian-recoverybucket-btecy2pllzgt\n[2026-11-22 08:30:12] Dr. Joseph Torres accessed #REP-41\n[2026-11-22 08:31:05] Patient John Doe clinical diagnostic recorded\n[2026-11-22 08:32:54] Adversary DeleteObject intercepted\n[2026-11-22 08:32:55] Object restored from immutable vault\nIntegrity: 100% Preserved\n`
+      return new NextResponse(text, {
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Content-Disposition': `attachment; filename="${target === 'baseline' ? 'audit-ledger-DELETED-404.txt' : 'audit-ledger-AEGIS-RESTORED.log'}"`
+        }
+      })
+    }
+
+    // PII Reconnaissance
+    if (docName.includes('metadata') || docName.includes('pii') || docName.includes('recon')) {
+      const data = target === 'baseline'
+        ? {
+            leak_status: 'EXFILTRATED_TO_ADVERSARY',
+            records_dumped: 1420,
+            sample: [
+              { id: 'P-1', name: 'John Doe', ssn: 'XXX-XX-4819', disease: 'Lumbar Spondylosis', vitals: { bp: '132/84', glucose: 106 } },
+              { id: 'P-2', name: 'Jane Smith', ssn: 'XXX-XX-9124', disease: 'Hypertension', vitals: { bp: '145/90', glucose: 118 } }
+            ],
+            alert_generated: false
+          }
+        : {
+            containment_status: 'RECONNAISSANCE_BLOCKED_BEFORE_EGRESS',
+            adversary_ip: '198.51.100.74',
+            s3_getobject_spike: '48 calls in 2.1s',
+            action: 'Temporary STS credentials revoked at T+1.22s',
+            pii_leaked: 0,
+            telemetry: 'CloudTrail S3 Data Events anomaly threshold tripped'
+          }
+      return NextResponse.json(data, {
+        headers: {
+          'Content-Disposition': `attachment; filename="${target === 'baseline' ? 'exfiltrated-patient-pii.json' : 'aegis-reconnaissance-blocked.json'}"`
+        }
+      })
+    }
+
+    // Default PDF (Ransomware vs Clean)
     if (target === 'baseline') {
       const ransomPdf = generateRansomwareExtortionPDF()
       return new NextResponse(new Uint8Array(ransomPdf), {
