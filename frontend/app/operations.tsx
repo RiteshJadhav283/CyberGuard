@@ -1,14 +1,13 @@
 'use client'
 
 import React, { useCallback, useEffect, useState } from 'react'
-import SOCSidebar, { TabKey } from './components/SOCSidebar'
-import OverviewView from './components/OverviewView'
+import ConsoleNavigationRail, { TabKey } from './components/ConsoleNavigationRail'
+import OverviewJudgeView from './components/OverviewJudgeView'
 import IncidentDetailView from './components/IncidentDetailView'
-import ContainmentView from './components/ContainmentView'
-import RecoveryCenterView from './components/RecoveryCenterView'
+import ComparisonExerciseView from './components/ComparisonExerciseView'
 import ActivityStreamView from './components/ActivityStreamView'
 import ConnectionsView from './components/ConnectionsView'
-import AttackLabView from './components/AttackLabView'
+import EvidenceDrawer, { EvidenceData } from './components/EvidenceDrawer'
 import {
   ShieldAlert,
   Search,
@@ -21,12 +20,14 @@ import {
   Database,
   Lock,
   Activity,
-  FileText
+  FileText,
+  AlertTriangle,
+  Server
 } from 'lucide-react'
 
 type User = { role: string; customer: string; email?: string }
 type ReadCheck = { object_key: string; requested_at: number; event_id: string | null }
-type Canary = { object_key: string; status: string; trusted_version_id: string | null }
+type Canary = { object_key: string; status: string; trusted_version_id: string | null; sha256?: string | null }
 type Conn = {
   id: string
   label: string
@@ -41,9 +42,9 @@ type Conn = {
   account: string | null
   region: string | null
   canaries: Canary[]
-  read_monitoring: { status: string; checks: ReadCheck[] }
-  slack_configured: boolean
-  jira_configured: boolean
+  read_monitoring?: { status: string; checks: ReadCheck[] }
+  slack_configured?: boolean
+  jira_configured?: boolean
 }
 type Case = {
   id: string
@@ -64,7 +65,13 @@ type Event = {
   received: number
   mode: string
   outcome: string
-  source: { role_arn?: string; session_arn?: string }
+  source: {
+    role_arn?: string
+    session_arn?: string
+    request_id?: string
+    version_id?: string
+    source_ip?: string
+  }
 }
 type Item = { key: string; source: string; observed: string; destination: string; sha256: string }
 type Probes = { test_role: string; control_role: string }
@@ -94,6 +101,7 @@ type Job = {
   }
 }
 type Report = Case & {
+  first_at?: number
   connection: Conn
   history: { previous_events: number; previous_files: number }
   evidence: string[]
@@ -110,276 +118,29 @@ type Props = { user: User; token: string; request: Request }
 const stamp = (time: number) => time ? new Date(time * 1000).toLocaleString() : 'Awaiting check'
 const words = (value: string) => value.replaceAll('_', ' ')
 
-// High-fidelity fallback / demo evidence dataset for MediCore AWS environment
-const NOW = Math.floor(Date.now() / 1000)
-
-const DEFAULT_CONN: Conn = {
-  id: 'conn-medicore-aws-ap-south-1',
-  label: 'MediCore AWS Production S3',
-  mode: 'aws',
-  enabled: true,
-  health: 'Healthy · Sub-second CloudTrail stream active',
-  checked_at: NOW - 60,
-  bucket: 'medicore-aegis-demo-017080036675',
-  prefix: 'reports/',
-  recovery_bucket: 'medicore-aegis-demo-017080036675-recovery',
-  canary: 'reports/.aegis-canaries/check-1.txt',
-  account: '017080036675',
-  region: 'ap-south-1',
-  canaries: [
-    { object_key: 'reports/.aegis-canaries/check-1.txt', status: 'armed_verified', trusted_version_id: 'wQ8.dJ4f_v1' },
-    { object_key: 'reports/.aegis-canaries/check-2.txt', status: 'armed_verified', trusted_version_id: 'xL2.pK9m_v1' },
-    { object_key: 'reports/.aegis-canaries/check-3.txt', status: 'armed_verified', trusted_version_id: 'yZ7.mR3t_v1' }
-  ],
-  read_monitoring: {
-    status: 'active_telemetry',
-    checks: [
-      {
-        object_key: 'reports/.aegis-canaries/check-1.txt',
-        requested_at: NOW - 120,
-        event_id: 'e492f1b8-6c8a-4d32-9c10-91823abce109'
-      }
-    ]
-  },
-  slack_configured: true,
-  jira_configured: true
-}
-
-const DEFAULT_CASES: Case[] = [
-  {
-    id: 'case-med-2026-001',
-    label: 'Canary Tampering & Mass Object Overwrite Attempt',
-    mode: 'aws',
-    actor: 'arn:aws:iam::017080036675:role/MedicoreCompromisedAppRole',
-    score: 98,
-    stage: 'contained',
-    last_at: NOW - 240
-  },
-  {
-    id: 'case-med-2026-002',
-    label: 'Correlated Rapid S3 Batch PutObject Sequence',
-    mode: 'replay',
-    actor: 'arn:aws:iam::017080036675:role/SimulationActor',
-    score: 84,
-    stage: 'review',
-    last_at: NOW - 1800
-  }
-]
-
-const DEFAULT_ACTIVITY: Event[] = [
-  {
-    event_id: 'ct-evt-99101',
-    label: 'Canary Overwrite',
-    actor: 'arn:aws:iam::017080036675:role/MedicoreCompromisedAppRole',
-    object_key: 'reports/.aegis-canaries/check-1.txt',
-    operation: 's3:PutObject',
-    at: NOW - 245,
-    received: NOW - 244,
-    mode: 'aws',
-    outcome: 'threat_detected',
-    source: {
-      role_arn: 'arn:aws:iam::017080036675:role/MedicoreCompromisedAppRole',
-      session_arn: 'arn:aws:sts::017080036675:assumed-role/MedicoreCompromisedAppRole/adversary-session'
-    }
-  },
-  {
-    event_id: 'ct-evt-99102',
-    label: 'Object Modification',
-    actor: 'arn:aws:iam::017080036675:role/MedicoreCompromisedAppRole',
-    object_key: 'reports/patient-1002-diagnostic.pdf',
-    operation: 's3:PutObject',
-    at: NOW - 244,
-    received: NOW - 243,
-    mode: 'aws',
-    outcome: 'intercepted',
-    source: { role_arn: 'arn:aws:iam::017080036675:role/MedicoreCompromisedAppRole' }
-  },
-  {
-    event_id: 'ct-evt-99103',
-    label: 'Object Modification',
-    actor: 'arn:aws:iam::017080036675:role/MedicoreCompromisedAppRole',
-    object_key: 'reports/oncology-lab-results-2026.csv',
-    operation: 's3:PutObject',
-    at: NOW - 243,
-    received: NOW - 242,
-    mode: 'aws',
-    outcome: 'blocked_by_cutoff',
-    source: { role_arn: 'arn:aws:iam::017080036675:role/MedicoreCompromisedAppRole' }
-  },
-  {
-    event_id: 'ct-evt-99104',
-    label: 'Telemetry Heartbeat',
-    actor: 'arn:aws:iam::017080036675:role/MedicorePipelineRole',
-    object_key: 'reports/patient-1001-summary.pdf',
-    operation: 's3:GetObject',
-    at: NOW - 600,
-    received: NOW - 599,
-    mode: 'aws',
-    outcome: 'allowed',
-    source: { role_arn: 'arn:aws:iam::017080036675:role/MedicorePipelineRole' }
-  }
-]
-
-const DEFAULT_REPORT: Report = {
-  id: 'case-med-2026-001',
-  label: 'Canary Tampering & Mass Object Overwrite Attempt',
-  mode: 'aws',
-  actor: 'arn:aws:iam::017080036675:role/MedicoreCompromisedAppRole',
-  score: 98,
-  stage: 'contained',
-  last_at: NOW - 240,
-  connection: DEFAULT_CONN,
-  history: { previous_events: 42, previous_files: 19 },
-  evidence: [
-    'Tripwire canary overwritten with encrypted high-entropy payload',
-    'Mass PutObject burst detected across sensitive diagnostic records',
-    'Deny policy attached to IAM role within 4.1s of canary trip'
-  ],
-  explanation: {
-    claims: [
-      {
-        text: 'Tripwire canary reports/.aegis-canaries/check-1.txt was overwritten with high-entropy bytes by untrusted role.',
-        event_ids: ['ct-evt-99101']
-      },
-      {
-        text: 'Rapid horizontal traversal attempt intercepted across patient medical summaries.',
-        event_ids: ['ct-evt-99102', 'ct-evt-99103']
-      }
-    ]
-  },
-  restriction: {
-    state: 'active_deny',
-    until_at: NOW + 7200,
-    policy: {
-      Version: '2012-10-17',
-      Statement: [
-        {
-          Sid: 'AegisAutoCutoffDeny',
-          Effect: 'Deny',
-          Action: ['s3:PutObject', 's3:DeleteObject', 's3:DeleteObjectVersion'],
-          Resource: ['arn:aws:s3:::medicore-aegis-demo-017080036675/*']
-        }
-      ]
-    }
-  },
-  events: DEFAULT_ACTIVITY.slice(0, 3),
-  jobs: [
-    {
-      id: 'job-cut-001',
-      kind: 'restrict',
-      state: 'applied',
-      expires: NOW + 7200,
-      payload: {
-        actor: 'arn:aws:iam::017080036675:role/MedicoreCompromisedAppRole',
-        bucket: 'medicore-aegis-demo-017080036675',
-        prefix: 'reports/',
-        recovery_bucket: 'medicore-aegis-demo-017080036675-recovery',
-        restriction_expires_at: NOW + 7200,
-        policy: {
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Sid: 'AegisAutoCutoffDeny',
-              Effect: 'Deny',
-              Action: ['s3:PutObject', 's3:DeleteObject'],
-              Resource: ['arn:aws:s3:::medicore-aegis-demo-017080036675/*']
-            }
-          ]
-        }
-      },
-      result: {
-        verification: 'IAM Deny policy verified active. Adversary credentials neutralized in 4.1s.',
-        baseline_probes: {
-          test_role: 'Write Access Allowed (Pre-Cutoff Baseline)',
-          control_role: 'Normal Pipeline Write Probes Healthy'
-        },
-        probes: {
-          test_role: 'AccessDenied (403 Forbidden)',
-          control_role: 'Healthy Write Probes Maintained'
-        }
-      }
-    },
-    {
-      id: 'job-rec-001',
-      kind: 'recovery',
-      state: 'preview',
-      expires: NOW + 3600,
-      payload: {
-        actor: 'arn:aws:iam::017080036675:role/MedicoreCompromisedAppRole',
-        bucket: 'medicore-aegis-demo-017080036675',
-        prefix: 'reports/',
-        recovery_bucket: 'medicore-aegis-demo-017080036675-recovery',
-        items: [
-          {
-            key: 'reports/.aegis-canaries/check-1.txt',
-            source: 'version-id-trusted-v1',
-            observed: 'version-id-corrupted-v2',
-            destination: 'medicore-aegis-demo-017080036675-recovery/check-1.txt',
-            sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
-          },
-          {
-            key: 'reports/patient-1002-diagnostic.pdf',
-            source: 'version-id-trusted-v1',
-            observed: 'version-id-corrupted-v2',
-            destination: 'medicore-aegis-demo-017080036675-recovery/patient-1002-diagnostic.pdf',
-            sha256: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08'
-          }
-        ]
-      },
-      result: {
-        verified: {
-          '0': 'SHA-256 integrity check verified against pre-attack signature.',
-          '1': 'SHA-256 integrity check verified against pre-attack signature.'
-        }
-      }
-    }
-  ],
-  timeline: [
-    {
-      id: 1,
-      at: NOW - 245,
-      actor: 'arn:aws:iam::017080036675:role/MedicoreCompromisedAppRole',
-      action: 'canary_tripwire_hit',
-      detail: 'Overwrote check-1.txt with ransomware signature'
-    },
-    {
-      id: 2,
-      at: NOW - 244,
-      actor: 'AEGIS Heuristic Engine',
-      action: 'anomaly_score_elevated',
-      detail: 'Threat risk elevated to 98/100 (Critical Ransomware)'
-    },
-    {
-      id: 3,
-      at: NOW - 242,
-      actor: 'AEGIS Auto-Cutoff Guardian',
-      action: 'iam_quarantine_enforced',
-      detail: 'Attached inline Deny policy AegisAutoCutoffDeny (4.1s latency)'
-    },
-    {
-      id: 4,
-      at: NOW - 240,
-      actor: 'AEGIS Blast-Radius Analyzer',
-      action: 'object_inventory_locked',
-      detail: 'Candidate clean versions isolated and SHA-256 hashed for staging recovery'
-    }
-  ]
-}
-
 export default function Operations({ user, token, request }: Props) {
   const [tab, setTab] = useState<TabKey>('Overview')
   const [snapshot, setSnapshot] = useState<Snapshot>({
-    connections: [DEFAULT_CONN],
-    cases: DEFAULT_CASES,
-    activity: DEFAULT_ACTIVITY
+    connections: [],
+    cases: [],
+    activity: []
   })
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [report, setReport] = useState<Report | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [loaded, setLoaded] = useState(false)
+  const [isBackendDown, setIsBackendDown] = useState(false)
+  const [lastSyncTime, setLastSyncTime] = useState<number | null>(null)
   const [filterStage, setFilterStage] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
+
+  // Evidence Drawer state
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false)
+  const [inspectedEvidence, setInspectedEvidence] = useState<EvidenceData | null>(null)
+
+  // URL exercise persistence
+  const [initialExerciseId, setInitialExerciseId] = useState<string | undefined>(undefined)
 
   const canReview = user.role !== 'viewer'
   const admin = user.role === 'admin'
@@ -395,12 +156,22 @@ export default function Operations({ user, token, request }: Props) {
     [request, token]
   )
 
-  // Sync case query parameter from URL
+  // Sync URL parameters on initial load (?case={id}, ?exercise={uuid}, ?tab={tab})
   useEffect(() => {
-    const caseParam = new URLSearchParams(window.location.search).get('case')
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const caseParam = params.get('case')
+    const exerciseParam = params.get('exercise')
+    const tabParam = params.get('tab') as TabKey | null
+
     if (caseParam) {
       setSelectedId(caseParam)
       setTab('Incidents')
+    } else if (exerciseParam) {
+      setInitialExerciseId(exerciseParam)
+      setTab('Comparison')
+    } else if (tabParam && ['Overview', 'Activity', 'Comparison', 'Incidents', 'Connections'].includes(tabParam)) {
+      setTab(tabParam)
     }
   }, [])
 
@@ -409,7 +180,6 @@ export default function Operations({ user, token, request }: Props) {
     let active = true
     let timer: ReturnType<typeof setTimeout>
     let refreshing = false
-    let socket: WebSocket | undefined
 
     async function refresh() {
       if (!active || refreshing) return
@@ -422,55 +192,38 @@ export default function Operations({ user, token, request }: Props) {
         ])
 
         if (active) {
-          if (overviewRes.status === 'fulfilled' && overviewRes.value?.connections) {
-            const data = overviewRes.value
-            setSnapshot({
-              connections: data.connections.length ? data.connections : [DEFAULT_CONN],
-              cases: data.cases.length ? data.cases : DEFAULT_CASES,
-              activity: data.activity.length ? data.activity : DEFAULT_ACTIVITY
-            })
+          if (overviewRes.status === 'fulfilled' && overviewRes.value && overviewRes.value.connections) {
+            setSnapshot(overviewRes.value)
+            setIsBackendDown(false)
+            setLastSyncTime(Math.floor(Date.now() / 1000))
+          } else if (overviewRes.status === 'rejected') {
+            setIsBackendDown(true)
           }
-          if (detailRes.status === 'fulfilled' && detailRes.value?.id) {
+
+          if (detailRes.status === 'fulfilled' && detailRes.value && detailRes.value.id) {
             setReport(detailRes.value)
-          } else if (selectedId && !report) {
-            // Use default report fallback if viewing sample
-            setReport(DEFAULT_REPORT)
           }
           setLoaded(true)
         }
       } catch (e) {
         if (active) {
-          // Graceful fallback for offline demo presentations
+          setIsBackendDown(true)
           setLoaded(true)
         }
       }
       refreshing = false
       if (active) {
-        timer = setTimeout(refresh, socket?.readyState === WebSocket.OPEN ? 15000 : 4000)
+        timer = setTimeout(refresh, 4000)
       }
     }
 
     refresh()
 
-    try {
-      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      socket = new WebSocket(`${wsProtocol}//${window.location.host}/api/v1/ops/stream`)
-      socket.onopen = () => {
-        if (active) socket?.send(token)
-      }
-      socket.onmessage = (e) => {
-        try {
-          if (active && JSON.parse(e.data).changed) refresh()
-        } catch (_) {}
-      }
-    } catch (_) {}
-
     return () => {
       active = false
       clearTimeout(timer)
-      socket?.close()
     }
-  }, [call, selectedId, token])
+  }, [call, selectedId])
 
   async function act(path: string, body?: unknown) {
     setBusy(true)
@@ -493,12 +246,18 @@ export default function Operations({ user, token, request }: Props) {
   async function download(path: string, name: string) {
     try {
       const response = await request('/ops' + path, token)
-      const url = URL.createObjectURL(await response.blob())
+      if (!response.ok) {
+        throw new Error(`Download failed with status ${response.status}`)
+      }
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
       a.download = name
+      document.body.appendChild(a)
       a.click()
-      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 2000)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Download failed')
     }
@@ -507,16 +266,46 @@ export default function Operations({ user, token, request }: Props) {
   function openCase(id: string) {
     setSelectedId(id)
     setTab('Incidents')
-    if (id === 'case-med-2026-001') {
-      setReport(DEFAULT_REPORT)
-    } else {
+    setReport(null)
+
+    // Update URL query param ?case={id}
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href)
+      url.searchParams.set('case', id)
+      url.searchParams.delete('exercise')
+      window.history.pushState({}, '', url.toString())
+    }
+
+    call('/cases/' + id)
+      .then((res) => {
+        if (res?.id) setReport(res)
+      })
+      .catch((e) => {
+        setError(`Failed to load case ${id}: ${e.message}`)
+      })
+  }
+
+  function closeCase() {
+    setSelectedId(null)
+    setReport(null)
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href)
+      url.searchParams.delete('case')
+      window.history.pushState({}, '', url.toString())
+    }
+  }
+
+  function handleTabSelect(newTab: TabKey) {
+    setTab(newTab)
+    if (newTab !== 'Incidents') {
+      setSelectedId(null)
       setReport(null)
-      call('/cases/' + id)
-        .then((res) => {
-          if (res?.id) setReport(res)
-          else setReport(DEFAULT_REPORT)
-        })
-        .catch(() => setReport(DEFAULT_REPORT))
+    }
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href)
+      url.searchParams.set('tab', newTab)
+      if (newTab !== 'Incidents') url.searchParams.delete('case')
+      window.history.pushState({}, '', url.toString())
     }
   }
 
@@ -533,32 +322,71 @@ export default function Operations({ user, token, request }: Props) {
     return matchesStage && matchesSearch
   })
 
+  // Has stale cache when backend is down but previous snapshot exists
+  const hasStaleCache = isBackendDown && snapshot.connections.length > 0
+
   return (
-    <div style={{ display: 'flex', minHeight: 'calc(100vh - 61px)' }}>
-      {/* Sidebar Navigation */}
-      <SOCSidebar
+    <div style={{ display: 'flex', minHeight: 'calc(100vh - 61px)', background: 'var(--bg-base)' }}>
+      {/* 5-Item Operations Navigation Rail */}
+      <ConsoleNavigationRail
         currentTab={tab}
-        onSelectTab={(selectedTab) => {
-          setTab(selectedTab)
-          if (selectedTab !== 'Incidents') {
-            setSelectedId(null)
-          }
-        }}
+        onSelectTab={handleTabSelect}
         incidentCount={activeIncidents.length}
         hasCriticalAlert={hasCriticalAlert}
       />
 
       {/* Main Command Workspace */}
-      <main style={{ flex: 1, padding: '1.5rem 2rem', overflowY: 'auto', background: 'var(--bg-base)' }}>
+      <main style={{ flex: 1, padding: '1.5rem 2.25rem', overflowY: 'auto' }}>
+        {/* Backend Down / Stale Cache Alert Banner */}
+        {isBackendDown && (
+          <div
+            style={{
+              marginBottom: '1.25rem',
+              padding: '1rem 1.25rem',
+              borderRadius: '8px',
+              background: '#fef3c7',
+              border: '1px solid #f59e0b',
+              color: '#92400e',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              boxShadow: 'var(--shadow-sm)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <AlertTriangle style={{ width: '20px', height: '20px', color: '#b45309', flexShrink: 0 }} />
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '0.875rem' }}>
+                  {hasStaleCache
+                    ? `[STALE CACHE ACTIVE] Aegis API Offline — Showing Cached Evidence from ${lastSyncTime ? new Date(lastSyncTime * 1000).toLocaleTimeString() : 'Previous Sync'}`
+                    : 'Aegis Core API Offline / Unreachable (HTTP 503)'}
+                </div>
+                <div style={{ fontSize: '0.8125rem', marginTop: '0.2rem', color: '#78350f' }}>
+                  FastAPI service at <code>http://127.0.0.1:8000</code> is not responding. Ensure the backend process is started to stream live CloudTrail telemetry.
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => call('/overview').then((res) => { if (res?.connections) { setSnapshot(res); setIsBackendDown(false); } })}
+              className="btn-secondary"
+              style={{ padding: '0.4rem 0.85rem', fontSize: '0.75rem', borderColor: '#d97706', color: '#92400e' }}
+            >
+              <RefreshCw style={{ width: '13px', height: '13px' }} />
+              Retry Connection
+            </button>
+          </div>
+        )}
+
+        {/* Global Error Notice */}
         {error && (
           <div
             style={{
-              marginBottom: '1.5rem',
+              marginBottom: '1.25rem',
               padding: '0.875rem 1.25rem',
               borderRadius: '8px',
-              background: 'rgba(239,68,68,0.15)',
-              border: '1px solid rgba(239,68,68,0.4)',
-              color: '#fca5a5',
+              background: '#fee2e2',
+              border: '1px solid #f87171',
+              color: '#991b1b',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -566,7 +394,7 @@ export default function Operations({ user, token, request }: Props) {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <AlertCircle style={{ width: '18px', height: '18px', color: '#ef4444' }} />
+              <AlertCircle style={{ width: '18px', height: '18px', color: '#dc2626' }} />
               <span>{error}</span>
             </div>
             <button
@@ -574,7 +402,7 @@ export default function Operations({ user, token, request }: Props) {
               style={{
                 background: 'transparent',
                 border: 'none',
-                color: '#fca5a5',
+                color: '#991b1b',
                 cursor: 'pointer',
                 fontWeight: 600
               }}
@@ -584,17 +412,43 @@ export default function Operations({ user, token, request }: Props) {
           </div>
         )}
 
-        {/* 1. OVERVIEW TAB */}
+        {/* 1. OVERVIEW TAB (60-sec sequence, probe matrix, timeline, quick jump) */}
         {tab === 'Overview' && (
-          <OverviewView
+          <OverviewJudgeView
             cases={snapshot.cases}
             connections={snapshot.connections}
+            activity={snapshot.activity}
             onOpenCase={openCase}
-            onNavigateTab={(t) => setTab(t)}
+            onNavigateTab={handleTabSelect}
+            onInspectEvidence={(ev) => {
+              setInspectedEvidence(ev)
+              setIsDrawerOpen(true)
+            }}
           />
         )}
 
-        {/* 2. INCIDENTS TAB */}
+        {/* 2. ACTIVITY TAB (CloudTrail telemetry stream) */}
+        {tab === 'Activity' && (
+          <ActivityStreamView
+            activity={snapshot.activity}
+            isStale={hasStaleCache}
+            onInspectEvent={(ev) => {
+              setInspectedEvidence(ev)
+              setIsDrawerOpen(true)
+            }}
+          />
+        )}
+
+        {/* 3. COMPARISON TAB (Dual Replay Lanes Bench) */}
+        {tab === 'Comparison' && (
+          <ComparisonExerciseView
+            initialExerciseId={initialExerciseId}
+            onOpenCase={openCase}
+            request={(path, options) => request('/ops' + path, token, options)}
+          />
+        )}
+
+        {/* 4. INCIDENTS TAB (Deep Investigation & Case List) */}
         {tab === 'Incidents' && (
           <>
             {selectedId && report ? (
@@ -603,10 +457,7 @@ export default function Operations({ user, token, request }: Props) {
                 canReview={canReview}
                 admin={admin}
                 busy={busy}
-                onBack={() => {
-                  setSelectedId(null)
-                  setReport(null)
-                }}
+                onBack={closeCase}
                 onAct={act}
                 onDownload={download}
               />
@@ -626,15 +477,15 @@ export default function Operations({ user, token, request }: Props) {
                       style={{
                         margin: 0,
                         fontSize: '1.5rem',
-                        fontWeight: 700,
-                        color: '#f8fafc',
+                        fontWeight: 800,
+                        color: 'var(--brand-navy)',
                         letterSpacing: '-0.02em',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '0.75rem'
                       }}
                     >
-                      <ShieldAlert style={{ width: '24px', height: '24px', color: '#06b6d4' }} />
+                      <ShieldAlert style={{ width: '24px', height: '24px', color: '#0284c7' }} />
                       Incident Investigation Queue
                     </h1>
                     <p style={{ margin: '0.25rem 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
@@ -644,11 +495,11 @@ export default function Operations({ user, token, request }: Props) {
                   <div style={{ display: 'flex', gap: '0.75rem' }}>
                     <button
                       className="btn-secondary"
-                      onClick={() => act('/overview')}
+                      onClick={() => call('/overview').then((res) => { if (res?.connections) setSnapshot(res) })}
                       disabled={busy}
                     >
                       <RefreshCw style={{ width: '14px', height: '14px' }} />
-                      Refresh Stream
+                      Refresh Incidents
                     </button>
                   </div>
                 </div>
@@ -657,7 +508,7 @@ export default function Operations({ user, token, request }: Props) {
                 <div
                   className="soc-card"
                   style={{
-                    padding: '1rem 1.25rem',
+                    padding: '0.875rem 1.25rem',
                     marginBottom: '1.5rem',
                     display: 'flex',
                     gap: '1rem',
@@ -688,17 +539,17 @@ export default function Operations({ user, token, request }: Props) {
 
                   <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                     <Filter style={{ width: '15px', height: '15px', color: 'var(--text-dim)' }} />
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase', fontWeight: 600 }}>
                       Stage:
                     </span>
-                    {['all', 'open', 'review', 'contained', 'recovered'].map((st) => (
+                    {['all', 'open', 'review', 'contained', 'reversed', 'recovered'].map((st) => (
                       <button
                         key={st}
                         onClick={() => setFilterStage(st)}
                         style={{
-                          background: filterStage === st ? 'rgba(6,182,212,0.2)' : 'rgba(15,23,42,0.6)',
-                          border: `1px solid ${filterStage === st ? 'var(--accent-cyan)' : 'var(--border-muted)'}`,
-                          color: filterStage === st ? '#38bdf8' : '#94a3b8',
+                          background: filterStage === st ? 'var(--brand-navy)' : 'var(--bg-sub)',
+                          border: `1px solid ${filterStage === st ? 'var(--brand-navy)' : 'var(--border-subtle)'}`,
+                          color: filterStage === st ? '#ffffff' : 'var(--text-muted)',
                           padding: '0.35rem 0.75rem',
                           borderRadius: '6px',
                           fontSize: '0.75rem',
@@ -720,18 +571,18 @@ export default function Operations({ user, token, request }: Props) {
                       className="soc-card"
                       style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}
                     >
-                      <CheckCircle style={{ width: '36px', height: '36px', color: '#10b981', margin: '0 auto 1rem' }} />
-                      <div style={{ fontSize: '1rem', fontWeight: 600, color: '#f1f5f9' }}>
-                        No matching incidents found
+                      <CheckCircle style={{ width: '36px', height: '36px', color: '#15803d', margin: '0 auto 1rem' }} />
+                      <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--brand-navy)' }}>
+                        {snapshot.cases.length === 0 ? 'Awaiting Incident Detection' : 'No matching incidents found'}
                       </div>
                       <p style={{ margin: '0.5rem 0 0', fontSize: '0.85rem' }}>
-                        Cloud assets are actively monitored. Tripwires and access cutoffs will trigger cases here.
+                        Tripwire canaries and access cutoffs will trigger cases here as CloudTrail events arrive.
                       </p>
                     </div>
                   ) : (
                     filteredCases.map((c) => {
                       const isCritical = c.score >= 80
-                      const isContained = c.stage === 'contained'
+                      const isContained = c.stage === 'contained' || c.stage === 'reversed'
                       return (
                         <div
                           key={c.id}
@@ -749,10 +600,10 @@ export default function Operations({ user, token, request }: Props) {
                           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem', flex: 1 }}>
                             <div
                               style={{
-                                background: isCritical ? 'rgba(239,68,68,0.2)' : 'rgba(6,182,212,0.15)',
+                                background: isCritical ? '#fee2e2' : '#e0f2fe',
                                 padding: '0.75rem',
                                 borderRadius: '10px',
-                                border: `1px solid ${isCritical ? 'rgba(239,68,68,0.4)' : 'rgba(6,182,212,0.3)'}`,
+                                border: `1px solid ${isCritical ? '#fca5a5' : '#7dd3fc'}`,
                                 marginTop: '0.2rem'
                               }}
                             >
@@ -760,13 +611,13 @@ export default function Operations({ user, token, request }: Props) {
                                 style={{
                                   width: '24px',
                                   height: '24px',
-                                  color: isCritical ? '#ef4444' : '#06b6d4'
+                                  color: isCritical ? '#dc2626' : '#0284c7'
                                 }}
                               />
                             </div>
                             <div style={{ flex: 1 }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.35rem' }}>
-                                <span style={{ fontSize: '1.05rem', fontWeight: 700, color: '#f8fafc' }}>
+                                <span style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--brand-navy)' }}>
                                   {c.label}
                                 </span>
                                 <span className={isCritical ? 'badge badge-red' : 'badge badge-cyan'}>
@@ -795,8 +646,8 @@ export default function Operations({ user, token, request }: Props) {
                                 }}
                               >
                                 <div>
-                                  <span style={{ color: 'var(--text-dim)' }}>Actor: </span>
-                                  <span className="font-mono" style={{ color: '#cbd5e1' }}>
+                                  <span style={{ color: 'var(--text-dim)', fontWeight: 600 }}>Actor: </span>
+                                  <span className="font-mono" style={{ color: 'var(--text-main)', fontWeight: 500 }}>
                                     {c.actor}
                                   </span>
                                 </div>
@@ -805,7 +656,7 @@ export default function Operations({ user, token, request }: Props) {
                                   <span>{stamp(c.last_at)}</span>
                                 </div>
                                 <div>
-                                  <span style={{ color: 'var(--text-dim)' }}>Case ID: </span>
+                                  <span style={{ color: 'var(--text-dim)', fontWeight: 600 }}>Case ID: </span>
                                   <span className="font-mono">{c.id}</span>
                                 </div>
                               </div>
@@ -834,117 +685,24 @@ export default function Operations({ user, token, request }: Props) {
           </>
         )}
 
-        {/* 3. CONTAINMENT TAB */}
-        {tab === 'Containment' && (
-          <ContainmentView
-            cases={snapshot.cases}
-            onOpenCase={openCase}
-          />
-        )}
-
-        {/* 4. RECOVERY TAB */}
-        {tab === 'Recovery' && (
-          <RecoveryCenterView
-            cases={snapshot.cases}
-            onOpenCase={openCase}
-          />
-        )}
-
-        {/* 5. ACTIVITY TAB */}
-        {tab === 'Activity' && (
-          <ActivityStreamView
-            activity={snapshot.activity}
-          />
-        )}
-
-        {/* 6. ASSETS & CONNECTIONS TAB */}
-        {tab === 'Assets' && (
+        {/* 5. CONNECTIONS TAB (Registered MediCore AWS Storage Asset) */}
+        {tab === 'Connections' && (
           <ConnectionsView
             connections={snapshot.connections}
             admin={admin}
             busy={busy}
+            isStale={hasStaleCache}
             onAct={act}
           />
-        )}
-
-        {/* 7. ATTACK LAB TAB */}
-        {tab === 'AttackLab' && (
-          <AttackLabView
-            connections={snapshot.connections}
-            busy={busy}
-            onAct={act}
-            onOpenCase={openCase}
-            onNavigateTab={(t) => setTab(t)}
-          />
-        )}
-
-        {/* 8. AUDIT TIMELINE TAB */}
-        {tab === 'Audit' && (
-          <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
-            <div style={{ marginBottom: '1.5rem' }}>
-              <h1
-                style={{
-                  margin: 0,
-                  fontSize: '1.5rem',
-                  fontWeight: 700,
-                  color: '#f8fafc',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.75rem'
-                }}
-              >
-                <FileText style={{ width: '24px', height: '24px', color: '#06b6d4' }} />
-                Immutable SOC Audit Log & Compliance Ledger
-              </h1>
-              <p style={{ margin: '0.25rem 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                Cryptographic timeline of automated cutoff decisions, admin approvals, reversal proofs, and SHA-256 integrity checks.
-              </p>
-            </div>
-
-            <div className="soc-card" style={{ padding: '1.5rem' }}>
-              <div className="timeline-track">
-                {DEFAULT_REPORT.timeline.map((event, idx) => (
-                  <div key={idx} className="timeline-node">
-                    <div className="timeline-marker">
-                      <span className="radar-dot" style={{ width: '6px', height: '6px' }} />
-                    </div>
-                    <div
-                      style={{
-                        background: 'rgba(15, 23, 42, 0.7)',
-                        border: '1px solid var(--border-subtle)',
-                        borderRadius: '8px',
-                        padding: '1rem'
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          marginBottom: '0.35rem'
-                        }}
-                      >
-                        <span style={{ fontWeight: 700, color: '#f1f5f9', fontSize: '0.9rem' }}>
-                          {words(event.action)}
-                        </span>
-                        <span className="font-mono" style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
-                          {stamp(event.at)}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: '0.825rem', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>
-                        {event.detail}
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--accent-cyan)' }}>
-                        Actor: <span className="font-mono">{event.actor}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
         )}
       </main>
+
+      {/* Forensic Slide-Out Evidence Drawer */}
+      <EvidenceDrawer
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        evidence={inspectedEvidence}
+      />
     </div>
   )
 }

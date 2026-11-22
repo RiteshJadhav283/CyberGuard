@@ -27,6 +27,44 @@ class CanaryAcceptance(unittest.IsolatedAsyncioTestCase):
     def conn(self,db,cid):
         return run(db,"SELECT * FROM connections WHERE id=:id",id=cid).mappings().one()
 
+    async def test_dashboard_comparison_replays_both_lanes_once(self):
+        path = "exercises/comparison/" + uid()
+
+        async def start(role):
+            return await self.client.put("ops/" + path, headers=self.tokens[role])
+
+        self.assertEqual((await start("analyst")).status_code, 403)
+        response = await start("admin")
+        self.assertEqual(response.status_code, 200, response.text)
+        comparison = response.json()
+        self.assertEqual(comparison["mode"], "replay")
+        self.assertEqual((await start("admin")).json(), comparison)
+        self.assertEqual((await self.get(path, "viewer")).json(), comparison)
+        self.assertEqual((await self.get(path, "outsider")).status_code, 404)
+        protected, baseline = (comparison["lanes"][lane] for lane in ("protected", "baseline"))
+        self.assertIsNone(baseline["case_id"])
+        self.assertEqual(protected["object_key"], baseline["object_key"])
+        for lane in (protected, baseline):
+            self.assertEqual(lane["outcome"], "success")
+            self.assertNotEqual(lane["trusted_version_id"], lane["observed_version_id"])
+            event_path = f"connections/{lane['connection']}/activity/{lane['event_id']}"
+            event = await self.get(event_path, "viewer")
+            self.assertEqual(event.json()["mode"], "replay")
+            self.assertEqual((await self.get(event_path, "outsider")).status_code, 404)
+            self.assertEqual((await self.post(f"connections/{lane['connection']}/replay/canary-overwrite")).status_code, 409)
+        case = "cases/" + protected["case_id"]
+        restrict = (await self.post(case + "/containment/restrict")).json()["id"]
+        await self.post(case + "/jobs/" + restrict + "/approve")
+        self.process(restrict)
+        recovery = (await self.post(case + "/recovery", {"keys": [protected["object_key"]]})).json()["id"]
+        await self.post(case + "/jobs/" + recovery + "/approve")
+        self.process(recovery)
+        content = await self.get(case + f"/jobs/{recovery}/files/0", "viewer")
+        self.assertEqual(content.content, b"MediCore synthetic report\nDemo reference: 001\n")
+        updated = (await self.get(path)).json()["lanes"]
+        self.assertEqual(updated["protected"]["stage"], "recovered")
+        self.assertEqual(updated["baseline"], baseline)
+
     async def rules(self,cid,**fields):
         reply=await self.client.put(f"ops/connections/{cid}/rules",json=fields,headers=self.tokens["admin"])
         self.assertEqual(reply.status_code,200,reply.text)

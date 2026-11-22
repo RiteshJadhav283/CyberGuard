@@ -1,12 +1,14 @@
 """Authenticated operator workflow for replay and customer-owned AWS connections."""
 import json
 from typing import Literal
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from .cloud import Cloud, ReviewRequired, replay_bytes
+from . import comparison
 from .canary import provision, inventory, check_reads, read_health
 from .response import eligible, proposal, reserve
 from .rules import Rules
@@ -91,6 +93,16 @@ def get_connection(identifier:str,user=Depends(current_user),db:Session=Depends(
     return public_conn(db,connection(db,user,identifier))
 
 
+@router.get("/connections/{identifier}/activity/{event_id}")
+def get_activity(identifier: str, event_id: str, user=Depends(current_user), db:Session=Depends(database)):
+    conn = connection(db, user, identifier)
+    event = run(db, "SELECT * FROM activity WHERE connection=:conn AND event_id=:event",
+                conn=identifier, event=event_id).mappings().first()
+    if event is None:
+        raise HTTPException(404, "Activity unavailable")
+    return dict(event) | {"source": json.loads(event["source"]), "mode": conn["mode"], "label": conn["label"]}
+
+
 @router.put("/connections/{identifier}/rules")
 def configure(identifier:str,ruleset:Rules,user=Depends(roles("admin")),db:Session=Depends(database)):
     connection(db,user,identifier)
@@ -168,11 +180,31 @@ def run_replay(identifier:str,scenario:Literal["routine","bulk","canary","correl
     conn=connection(db,user,identifier)
     if conn["mode"]!="replay" or not conn["enabled"]:
         raise HTTPException(409,"An enabled replay connection is required")
+    if json.loads(conn["config"]).get("comparison_lane"):
+        raise HTTPException(409, "Start a new comparison exercise for another rehearsal")
     try:
         result=replay(db,conn,scenario)
     except ReviewRequired as exc:
         raise HTTPException(409,str(exc)) from exc
     db.commit()
+    return result
+
+
+@router.put("/exercises/comparison/{exercise_id}")
+def start_comparison(exercise_id: UUID, user=Depends(roles("admin")), db:Session=Depends(database)):
+    comparison.start(db, user["customer"], exercise_id)
+    result = comparison.result(db, user["customer"], exercise_id)
+    if result is None:
+        raise HTTPException(409, "The comparison exercise is incomplete")
+    db.commit()
+    return result
+
+
+@router.get("/exercises/comparison/{exercise_id}")
+def get_comparison(exercise_id: UUID, user=Depends(current_user), db:Session=Depends(database)):
+    result = comparison.result(db, user["customer"], exercise_id)
+    if result is None:
+        raise HTTPException(404, "Comparison exercise unavailable")
     return result
 
 
@@ -360,7 +392,11 @@ def download(identifier:str,job_id:str,index:int,user=Depends(current_user),db:S
             cloud=Cloud(json.loads(conn["config"]))
             content,_=cloud.read(cloud.cfg["recovery_bucket"],item["destination"],version)
         except Exception:
-            raise HTTPException(503,"Recovered object unavailable")
+            cached=run(db,"SELECT content FROM replay_copies WHERE destination=:d",d=item["destination"]).scalar_one_or_none()
+            if cached is not None:
+                content=cached
+            else:
+                raise HTTPException(503,"Recovered object unavailable")
     if digest(content)!=item["sha256"]:
         raise HTTPException(409,"Read-back checksum mismatch")
     return Response(bytes(content),media_type="application/octet-stream",

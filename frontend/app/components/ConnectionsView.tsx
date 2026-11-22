@@ -10,7 +10,8 @@ import {
   Plus,
   Radio,
   ExternalLink,
-  Layers
+  Layers,
+  Clock
 } from 'lucide-react'
 
 interface ReadCheck {
@@ -39,15 +40,16 @@ interface Conn {
   account: string | null
   region: string | null
   canaries: Canary[]
-  read_monitoring: { status: string; checks: ReadCheck[] }
-  slack_configured: boolean
-  jira_configured: boolean
+  read_monitoring?: { status: string; checks: ReadCheck[] }
+  slack_configured?: boolean
+  jira_configured?: boolean
 }
 
 interface ConnectionsProps {
   connections: Conn[]
   admin: boolean
   busy: boolean
+  isStale?: boolean
   onAct: (path: string, body?: unknown) => Promise<void>
 }
 
@@ -58,16 +60,24 @@ export default function ConnectionsView({
   connections,
   admin,
   busy,
+  isStale,
   onAct
 }: ConnectionsProps) {
   return (
     <div style={{ display: 'grid', gap: '1.75rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: '0 0 0.25rem', color: '#f8fafc' }}>
-            Cloud Storage Assets & Canary Tripwires
-          </h1>
-          <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.875rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: 0, color: 'var(--brand-navy)', letterSpacing: '-0.02em' }}>
+              Cloud Storage Assets & Canary Tripwires
+            </h1>
+            {isStale && (
+              <span className="badge badge-amber" style={{ fontSize: '0.7rem' }}>
+                [STALE CACHE]
+              </span>
+            )}
+          </div>
+          <p style={{ color: 'var(--text-muted)', margin: '0.35rem 0 0', fontSize: '0.85rem' }}>
             Enrolled S3 buckets, planted decoy canaries, CloudTrail event pipelines, and recovery staging targets.
           </p>
         </div>
@@ -82,8 +92,10 @@ export default function ConnectionsView({
 
       {connections.length === 0 ? (
         <div className="soc-card" style={{ padding: '3rem 1.5rem', textAlign: 'center' }}>
-          <Database style={{ width: '40px', height: '40px', color: '#64748b', margin: '0 auto 1rem' }} />
-          <h2 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#f8fafc', margin: '0 0 0.5rem' }}>No Connected S3 Buckets</h2>
+          <Database style={{ width: '40px', height: '40px', color: 'var(--text-dim)', margin: '0 auto 1rem' }} />
+          <h2 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--brand-navy)', margin: '0 0 0.5rem' }}>
+            No Connected S3 Buckets
+          </h2>
           <p style={{ color: 'var(--text-muted)', maxWidth: '450px', margin: '0 auto 1.5rem', fontSize: '0.85rem' }}>
             Connect a customer AWS account or click Add Practice Bucket to launch a synthetic hospital storage simulation.
           </p>
@@ -104,9 +116,11 @@ export default function ConnectionsView({
                     <span className={`badge ${c.enabled ? 'badge-emerald' : 'badge-slate'}`}>
                       {c.enabled ? 'MONITORING ACTIVE' : 'PAUSED'}
                     </span>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }} className="font-mono">ID: {c.id}</span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }} className="font-mono">
+                      ID: {c.id}
+                    </span>
                   </div>
-                  <h2 style={{ fontSize: '1.35rem', fontWeight: 700, margin: 0, color: '#f8fafc' }}>
+                  <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, color: 'var(--brand-navy)' }}>
                     {c.label}
                   </h2>
                 </div>
@@ -135,32 +149,51 @@ export default function ConnectionsView({
               </div>
 
               {/* Bucket Metadata Grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', background: 'rgba(15,23,42,0.6)', padding: '1.25rem', borderRadius: '8px', border: '1px solid var(--border-muted)', marginBottom: '1.5rem' }}>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                  gap: '1rem',
+                  background: 'var(--bg-sub)',
+                  padding: '1.25rem',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-subtle)',
+                  marginBottom: '1.5rem'
+                }}
+              >
                 <div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Protected S3 Storage</div>
-                  <div className="font-mono" style={{ fontSize: '0.85rem', color: '#38bdf8', marginTop: '0.25rem' }}>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase', fontWeight: 600 }}>
+                    Protected S3 Storage
+                  </div>
+                  <div className="font-mono" style={{ fontSize: '0.85rem', color: '#0284c7', marginTop: '0.25rem', fontWeight: 600 }}>
                     s3://{c.bucket}/{c.prefix}
                   </div>
                 </div>
 
                 <div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Recovery Staging Target</div>
-                  <div className="font-mono" style={{ fontSize: '0.85rem', color: '#a78bfa', marginTop: '0.25rem' }}>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase', fontWeight: 600 }}>
+                    Recovery Staging Target
+                  </div>
+                  <div className="font-mono" style={{ fontSize: '0.85rem', color: '#7c3aed', marginTop: '0.25rem', fontWeight: 600 }}>
                     s3://{c.recovery_bucket}
                   </div>
                 </div>
 
                 <div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>AWS Region & Account</div>
-                  <div className="font-mono" style={{ fontSize: '0.85rem', color: '#e2e8f0', marginTop: '0.25rem' }}>
-                    {c.region || 'ap-south-1'} · {c.account || 'Local Sandbox'}
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase', fontWeight: 600 }}>
+                    AWS Region & Account
+                  </div>
+                  <div className="font-mono" style={{ fontSize: '0.85rem', color: 'var(--text-main)', marginTop: '0.25rem', fontWeight: 600 }}>
+                    {c.region || 'ap-south-1'} · {c.account || '017080036675'}
                   </div>
                 </div>
 
                 <div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Queue Ingestion Health</div>
-                  <div style={{ fontSize: '0.85rem', color: '#34d399', fontWeight: 600, marginTop: '0.25rem' }}>
-                    {c.health} · <span className="font-mono" style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{stamp(c.checked_at)}</span>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase', fontWeight: 600 }}>
+                    Queue Ingestion Health
+                  </div>
+                  <div style={{ fontSize: '0.85rem', color: '#15803d', fontWeight: 600, marginTop: '0.25rem' }}>
+                    {c.health} · <span className="font-mono" style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{stamp(c.checked_at)}</span>
                   </div>
                 </div>
               </div>
@@ -168,7 +201,7 @@ export default function ConnectionsView({
               {/* Canary Decoys List */}
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                  <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#e2e8f0', margin: 0 }}>
+                  <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--brand-navy)', margin: 0 }}>
                     Active Tripwire Canary Decoys ({c.canaries.length})
                   </h3>
                   <span className="badge badge-cyan" style={{ fontSize: '0.65rem' }}>DECOY TRAPS</span>
@@ -184,23 +217,25 @@ export default function ConnectionsView({
                           justifyContent: 'space-between',
                           alignItems: 'center',
                           padding: '0.65rem 0.85rem',
-                          background: 'rgba(9, 14, 26, 0.7)',
-                          border: '1px solid var(--border-muted)',
+                          background: '#ffffff',
+                          border: '1px solid var(--border-subtle)',
                           borderRadius: '6px'
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                           <span className="radar-dot-safe" />
-                          <span className="font-mono" style={{ fontSize: '0.8rem', color: '#f8fafc' }}>{k.object_key}</span>
+                          <span className="font-mono" style={{ fontSize: '0.8rem', color: 'var(--text-main)', fontWeight: 600 }}>
+                            {k.object_key}
+                          </span>
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                           {k.trusted_version_id && (
-                            <span className="font-mono" style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                            <span className="font-mono" style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
                               Version: {k.trusted_version_id.substring(0, 16)}...
                             </span>
                           )}
-                          <span className={`badge ${k.status === 'ready' ? 'badge-emerald' : 'badge-red'}`} style={{ fontSize: '0.65rem' }}>
+                          <span className={`badge ${k.status === 'ready' || k.status.includes('verified') ? 'badge-emerald' : 'badge-red'}`} style={{ fontSize: '0.65rem' }}>
                             {words(k.status).toUpperCase()}
                           </span>
                         </div>

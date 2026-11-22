@@ -8,6 +8,7 @@ The paths below are relative to `/api/v1/ops`.
 |---|---|---|
 | GET `/overview` | Viewer, analyst, admin | Customer connections, latest 100 cases and latest 40 activity records. Each activity row includes source mode, operation, outcome, key, actor, event ID, event time, receipt time and source evidence. |
 | GET `/connections/{id}` | Viewer, analyst, admin | One authorized deployment with read delivery status, canary inventory, enrolled role and effective response settings. |
+| GET `/connections/{id}/activity/{event_id}` | Viewer, analyst, admin | One persisted AWS or replay activity record, including source mode and provenance. |
 | POST `/connections/replay` | Admin | Open the customer's practice connection. Repeating the call returns the same connection. |
 | POST `/connections/aws` | Admin | Send `connection_id`, `account`, `region`, `bucket`, `prefix` from an operator-registered deployment. Checks versioning and queue access and activates that deployment. |
 | POST `/connections/{id}/enabled/{true-or-false}` | Admin | Enable or pause polling. Pending reversals and expiry cleanup can run while paused. |
@@ -55,6 +56,16 @@ Scheduled job entries take the form `{"role":"<exact role ARN>","weekdays":[0,1,
 - Canary inventory states include `pending`, `ready`, `awaiting_setup_receipt`, `conflict` and `legacy`. A lost PUT response can leave the original CloudTrail request ID pending until delivery. A collision preserves the customer's object. A legacy registration may have no independently recorded baseline.
 
 ## Mentoring acceptance
+
+### Dashboard comparison exercise
+
+Generate a UUID when an administrator starts a comparison. Send an authenticated `PUT /api/v1/ops/exercises/comparison/{uuid}` with no body. Reuse the UUID on retry. The API creates two isolated local fixture lanes and records one synthetic overwrite in each. Only the protected lane opens an Aegis case. Both lanes preserve the original fixture version. The endpoint uses the replay adapter and has no AWS mutation path.
+
+Use `GET /api/v1/ops/exercises/comparison/{uuid}` to refresh the comparison. The response has `mode: "replay"` and `lanes.protected` and `lanes.baseline`. Each lane has a connection ID, event ID, object key, operation, outcome, event time, trusted version ID and observed version ID. The protected lane includes `case_id` and the current `stage`. The baseline lane models manual intervention and has null case and stage fields. A different customer receives HTTP 404. A fresh UUID starts a new exercise.
+
+Use the protected case's existing endpoints for approval, recovery, reversal and export. The case report supplies provenance, probe outcomes and the action timeline. Render the comparison as Replay. In the live AWS view, match the S3 request ID returned by MediCore's synthetic upload endpoint to an AWS activity row from `/ops/overview`. Use the event detail endpoint to reopen the matched record after it leaves the recent activity list. Match the canary incident by case ID. Use timestamps from AWS activity and Aegis jobs for elapsed time, and show unknown stages as awaiting evidence.
+
+### Existing replay workflow
 
 From `backend/` with `requirements-test.txt` installed, run `python -m aegis.mentoring`. This command signs in, provisions the three synthetic canaries twice, replays one overwrite, approves the restriction, runs the worker and approves and verifies reversal. It uses a disposable SQLite database. Pass `--export PATH` to save the final synthetic case for review. To keep an interactive case in the dashboard, follow the mentoring steps in the repository README.
 

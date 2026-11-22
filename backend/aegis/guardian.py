@@ -197,6 +197,8 @@ def ingest(db, conn, event):
         entropy=event.get("entropy_jump",False),source=json.dumps(event.get("source",{})),outcome=outcome)
     if not inserted.rowcount:
         return
+    if conn["mode"] == "replay" and cfg.get("comparison_lane") == "baseline":
+        return
     changes = rows(run(db,"SELECT * FROM activity WHERE group_id=:g ORDER BY at,event_id",g=group))
     writes = [r for r in changes if r["outcome"]=="success" and r["operation"] in WRITES]
     touches = [r for r in changes if r["object_key"] in canaries]
